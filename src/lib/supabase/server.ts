@@ -6,7 +6,9 @@ export async function createClient() {
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || "https://mock-supabase.kippmarket.local",
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "mock-anon-key-kipp-market",
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+      "mock-anon-key-kipp-market",
     {
       cookies: {
         getAll() {
