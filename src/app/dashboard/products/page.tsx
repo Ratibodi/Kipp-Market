@@ -1,0 +1,723 @@
+"use client";
+
+import { useState } from "react";
+import {
+  Package,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  FileSpreadsheet,
+  Download,
+  Upload,
+  Edit,
+  Trash2,
+  Sparkles,
+  Scale,
+  CheckCircle,
+  AlertTriangle,
+  X,
+  ExternalLink,
+  Layers,
+  Barcode,
+  RefreshCw,
+} from "lucide-react";
+import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
+import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import { MOCK_CATALOG_PRODUCTS, CatalogProduct } from "@/data/mockData";
+import { useLanguage } from "@/context/LanguageContext";
+import { transliterateThaiBarcode } from "@/lib/scannerListener";
+
+export default function ProductsPage() {
+  const { t, language } = useLanguage();
+  const isTh = language === "th";
+
+  const [products, setProducts] = useState<CatalogProduct[]>(MOCK_CATALOG_PRODUCTS);
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
+  const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
+  const [isCsvModalOpen, setIsCsvModalOpen] = useState<boolean>(false);
+  const [editingProduct, setEditingProduct] = useState<CatalogProduct | null>(null);
+
+  // Form State
+  const [formNameTh, setFormNameTh] = useState("");
+  const [formNameEn, setFormNameEn] = useState("");
+  const [formBarcode, setFormBarcode] = useState("");
+  const [formPlu, setFormPlu] = useState("");
+  const [formCategory, setFormCategory] = useState<CatalogProduct["category"]>("Beverages");
+  const [formSaleType, setFormSaleType] = useState<"UNIT" | "WEIGHT">("UNIT");
+  const [formUnit, setFormUnit] = useState("ชิ้น");
+  const [formPrice, setFormPrice] = useState("25.00");
+  const [formCost, setFormCost] = useState("18.00");
+  const [formStock, setFormStock] = useState("20");
+  const [formIsQuickKey, setFormIsQuickKey] = useState(false);
+  const [formImageUrl, setFormImageUrl] = useState(
+    "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=160&h=160&q=80"
+  );
+
+  // Filtered Products
+  const filteredProducts = products.filter((prod) => {
+    const matchesSearch =
+      prod.nameTh.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      prod.nameEn.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      prod.barcode.includes(searchQuery) ||
+      (prod.plu && prod.plu.includes(searchQuery)) ||
+      prod.sku.includes(searchQuery);
+
+    const matchesCategory =
+      selectedCategory === "ALL" || prod.category === selectedCategory;
+
+    return matchesSearch && matchesCategory;
+  });
+
+  const handleOpenAddModal = (prod?: CatalogProduct) => {
+    if (prod) {
+      setEditingProduct(prod);
+      setFormNameTh(prod.nameTh);
+      setFormNameEn(prod.nameEn);
+      setFormBarcode(prod.barcode);
+      setFormPlu(prod.plu || "");
+      setFormCategory(prod.category);
+      setFormSaleType(prod.saleType);
+      setFormUnit(prod.unit);
+      setFormPrice(prod.price.toString());
+      setFormCost(prod.avgCost.toString());
+      setFormStock(prod.stockQty.toString());
+      setFormIsQuickKey(prod.isQuickKey);
+      setFormImageUrl(prod.imageUrl);
+    } else {
+      setEditingProduct(null);
+      setFormNameTh("");
+      setFormNameEn("");
+      setFormBarcode(`8850${Math.floor(100000000 + Math.random() * 900000000)}`);
+      setFormPlu("");
+      setFormCategory("Beverages");
+      setFormSaleType("UNIT");
+      setFormUnit(isTh ? "ชิ้น" : "pcs");
+      setFormPrice("35.00");
+      setFormCost("22.00");
+      setFormStock("24");
+      setFormIsQuickKey(true);
+      setFormImageUrl(
+        "https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=160&h=160&q=80"
+      );
+    }
+    setIsAddModalOpen(true);
+  };
+
+  const handleSaveProduct = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingProduct) {
+      setProducts((prev) =>
+        prev.map((item) =>
+          item.id === editingProduct.id
+            ? {
+                ...item,
+                nameTh: formNameTh,
+                nameEn: formNameEn,
+                barcode: formBarcode,
+                plu: formPlu || undefined,
+                category: formCategory,
+                saleType: formSaleType,
+                unit: formUnit,
+                price: parseFloat(formPrice) || 0,
+                avgCost: parseFloat(formCost) || 0,
+                stockQty: parseFloat(formStock) || 0,
+                isQuickKey: formIsQuickKey,
+                imageUrl: formImageUrl,
+              }
+            : item
+        )
+      );
+    } else {
+      const newProduct: CatalogProduct = {
+        id: `prod-${Date.now()}`,
+        sku: `SKU-${Math.floor(100000 + Math.random() * 900000)}`,
+        barcode: formBarcode,
+        plu: formPlu || undefined,
+        nameTh: formNameTh,
+        nameEn: formNameEn || formNameTh,
+        category: formCategory,
+        saleType: formSaleType,
+        unit: formUnit,
+        price: parseFloat(formPrice) || 0,
+        avgCost: parseFloat(formCost) || 0,
+        stockQty: parseFloat(formStock) || 0,
+        isQuickKey: formIsQuickKey,
+        imageUrl: formImageUrl,
+        status: "ACTIVE",
+      };
+      setProducts((prev) => [newProduct, ...prev]);
+    }
+    setIsAddModalOpen(false);
+  };
+
+  const handleToggleQuickKey = (id: string) => {
+    setProducts((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, isQuickKey: !item.isQuickKey } : item
+      )
+    );
+  };
+
+  const handleDeleteProduct = (id: string) => {
+    if (confirm(isTh ? "คุณต้องการลบสินค้านี้ใช่หรือไม่?" : "Delete this product?")) {
+      setProducts((prev) => prev.filter((item) => item.id !== id));
+    }
+  };
+
+  return (
+    <div className="flex h-screen bg-[#f8fafc] text-slate-900 font-sans overflow-hidden select-none">
+      <DashboardSidebar />
+
+      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+        <DashboardHeader />
+
+        <main className="p-6 max-w-7xl w-full mx-auto space-y-6">
+          {/* Top Title Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+            <div>
+              <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2.5">
+                <Package className="h-6 w-6 text-emerald-600" />
+                <span>{isTh ? "จัดการรายการสินค้า & คลัง" : "Product Catalog & Inventory"}</span>
+              </h1>
+              <p className="text-xs text-slate-500 mt-1">
+                {isTh
+                  ? "จัดการแคตตาล็อกสินค้า, กำหนดราคาขาย, ตั้งค่าปุ่มขายด่วน และสินค้าชั่งน้ำหนัก"
+                  : "Manage catalog products, pricing, fast-pick quick keys, and scale weight items"}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsCsvModalOpen(true)}
+                className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              >
+                <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+                <span>Import / Export CSV</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleOpenAddModal()}
+                className="px-4 py-2 rounded-xl bg-[#84cc16] hover:bg-[#65a30d] text-[#061a12] text-xs font-black transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                <Plus className="h-4 w-4" />
+                <span>{isTh ? "+ เพิ่มสินค้าใหม่" : "+ Add New Product"}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Metric Summary Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs">
+              <div className="text-xs text-slate-500 font-medium">
+                {isTh ? "รายการสินค้าทั้งหมด" : "Total Catalog SKUs"}
+              </div>
+              <div className="text-2xl font-black font-mono text-slate-900 mt-1">
+                {products.length}
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs">
+              <div className="text-xs text-slate-500 font-medium">
+                {isTh ? "สินค้าขายด่วน (Quick Keys)" : "Active Fast-Pick Keys"}
+              </div>
+              <div className="text-2xl font-black font-mono text-emerald-600 mt-1">
+                {products.filter((p) => p.isQuickKey).length}
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs">
+              <div className="text-xs text-slate-500 font-medium">
+                {isTh ? "สินค้าชั่งน้ำหนัก (ตาชั่ง)" : "Scale / Weight Items"}
+              </div>
+              <div className="text-2xl font-black font-mono text-lime-700 mt-1">
+                {products.filter((p) => p.saleType === "WEIGHT").length}
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs">
+              <div className="text-xs text-slate-500 font-medium">
+                {isTh ? "สินค้าใกล้หมดสต็อก" : "Low Stock Warnings"}
+              </div>
+              <div className="text-2xl font-black font-mono text-amber-600 mt-1">
+                {products.filter((p) => p.stockQty <= 10).length}
+              </div>
+            </div>
+          </div>
+
+          {/* Search & Category Filter Bar */}
+          <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="relative flex-1 w-full">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={
+                  isTh
+                    ? "ค้นหาด้วยชื่อสินค้า, บาร์โค้ด, PLU หรือ SKU..."
+                    : "Search by product name, barcode, PLU, or SKU..."
+                }
+                className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-emerald-600 focus:bg-white transition"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
+              {["ALL", "Dairy", "Ready Meal", "Beverages", "Snacks", "Meat & Fresh", "Bakery"].map(
+                (cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setSelectedCategory(cat)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                      selectedCategory === cat
+                        ? "bg-slate-900 text-white shadow-2xs"
+                        : "bg-slate-100 hover:bg-slate-200 text-slate-600"
+                    }`}
+                  >
+                    {cat === "ALL" ? (isTh ? "ทุกหมวดหมู่" : "All Categories") : cat}
+                  </button>
+                )
+              )}
+            </div>
+          </div>
+
+          {/* Products Table */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    <th className="py-3 px-4">{isTh ? "สินค้า" : "Product"}</th>
+                    <th className="py-3 px-3">{isTh ? "บาร์โค้ด / PLU" : "Barcode / PLU"}</th>
+                    <th className="py-3 px-3">{isTh ? "หมวดหมู่" : "Category"}</th>
+                    <th className="py-3 px-3 text-center">{isTh ? "ประเภท" : "Type"}</th>
+                    <th className="py-3 px-3 text-right">{isTh ? "ราคาขาย (฿)" : "Price (THB)"}</th>
+                    <th className="py-3 px-3 text-right">{isTh ? "ต้นทุนเฉลี่ย (฿)" : "Avg Cost (THB)"}</th>
+                    <th className="py-3 px-3 text-right">{isTh ? "คงเหลือ" : "Stock"}</th>
+                    <th className="py-3 px-3 text-center">{isTh ? "ปุ่มขายด่วน" : "Fast Pick"}</th>
+                    <th className="py-3 px-4 text-center">{isTh ? "จัดการ" : "Actions"}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredProducts.map((prod) => (
+                    <tr key={prod.id} className="hover:bg-slate-50/60 transition">
+                      {/* Product Name & Thumbnail */}
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={prod.imageUrl}
+                            alt={prod.nameEn}
+                            className="w-10 h-10 rounded-xl object-cover border border-slate-200 shrink-0"
+                          />
+                          <div>
+                            <div className="font-bold text-slate-900 text-xs">
+                              {isTh ? prod.nameTh : prod.nameEn}
+                            </div>
+                            <div className="text-[10px] text-slate-400 font-mono">
+                              SKU: {prod.sku}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Barcode & PLU */}
+                      <td className="py-3 px-3 font-mono">
+                        <div className="text-slate-800 font-semibold">{prod.barcode}</div>
+                        {prod.plu && (
+                          <div className="text-[10px] text-emerald-700">PLU: {prod.plu}</div>
+                        )}
+                      </td>
+
+                      {/* Category */}
+                      <td className="py-3 px-3">
+                        <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-medium text-[11px] border border-slate-200">
+                          {prod.category}
+                        </span>
+                      </td>
+
+                      {/* Type (Unit vs Weight) */}
+                      <td className="py-3 px-3 text-center">
+                        {prod.saleType === "WEIGHT" ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-lime-100 text-lime-900 font-bold text-[10px] border border-lime-300">
+                            <Scale className="h-3 w-3" />
+                            {isTh ? "ชั่ง นน." : "Weight"}
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium text-[10px]">
+                            {isTh ? "นับชิ้น" : "Unit"}
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Selling Price */}
+                      <td className="py-3 px-3 text-right font-bold font-mono text-slate-900">
+                        ฿{prod.price.toFixed(2)}
+                        <span className="text-[10px] text-slate-400 font-normal ml-0.5">
+                          /{prod.unit}
+                        </span>
+                      </td>
+
+                      {/* Avg Cost */}
+                      <td className="py-3 px-3 text-right font-mono text-slate-500">
+                        ฿{prod.avgCost.toFixed(2)}
+                      </td>
+
+                      {/* Stock Level */}
+                      <td className="py-3 px-3 text-right font-mono font-bold">
+                        <span
+                          className={`px-2 py-0.5 rounded ${
+                            prod.stockQty <= 10
+                              ? "bg-amber-100 text-amber-800"
+                              : "text-slate-700"
+                          }`}
+                        >
+                          {prod.stockQty} {prod.unit}
+                        </span>
+                      </td>
+
+                      {/* Quick Key Switch */}
+                      <td className="py-3 px-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleQuickKey(prod.id)}
+                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            prod.isQuickKey ? "bg-emerald-600" : "bg-slate-300"
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                              prod.isQuickKey ? "translate-x-4" : "translate-x-0"
+                            }`}
+                          />
+                        </button>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="py-3 px-4 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenAddModal(prod)}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer"
+                          >
+                            <Edit className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteProduct(prod.id)}
+                            className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition cursor-pointer"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </main>
+      </div>
+
+      {/* ADD / EDIT PRODUCT MODAL */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 font-sans select-none animate-in fade-in duration-150">
+          <div className="w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <h3 className="text-base font-bold text-slate-900">
+                {editingProduct
+                  ? isTh
+                    ? "แก้ไขข้อมูลสินค้า"
+                    : "Edit Product"
+                  : isTh
+                  ? "เพิ่มสินค้าใหม่ลงแคตตาล็อก"
+                  : "Add New Product"}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsAddModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProduct} className="p-6 overflow-y-auto space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    {isTh ? "ชื่อสินค้า (ไทย) *" : "Product Name (Thai) *"}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formNameTh}
+                    onChange={(e) => setFormNameTh(e.target.value)}
+                    className="w-full h-9 px-3 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-600"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    {isTh ? "ชื่อสินค้า (อังกฤษ)" : "Product Name (English)"}
+                  </label>
+                  <input
+                    type="text"
+                    value={formNameEn}
+                    onChange={(e) => setFormNameEn(e.target.value)}
+                    className="w-full h-9 px-3 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-600"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-700">
+                      {isTh ? "บาร์โค้ด EAN-13 *" : "Barcode EAN-13 *"}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const randomEan = `8850${Math.floor(100000000 + Math.random() * 900000000)}`;
+                        setFormBarcode(randomEan);
+                      }}
+                      className="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 flex items-center gap-1 cursor-pointer bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-lg border border-emerald-200 transition"
+                      title={isTh ? "สุ่มสร้างบาร์โค้ดใหม่สำหรับสินค้าที่ไม่มีบาร์โค้ด" : "Generate random barcode"}
+                    >
+                      <RefreshCw className="h-3 w-3" />
+                      <span>{isTh ? "🎲 สุ่มรหัสใหม่" : "Auto-Gen"}</span>
+                    </button>
+                  </div>
+                  <div className="relative flex items-center">
+                    <Barcode className="absolute left-2.5 h-4 w-4 text-slate-400" />
+                    <input
+                      type="text"
+                      required
+                      value={formBarcode}
+                      onChange={(e) => setFormBarcode(transliterateThaiBarcode(e.target.value))}
+                      placeholder="เช่น 8850188201948"
+                      className="w-full h-9 pl-8 pr-3 rounded-xl border border-slate-300 font-mono text-xs focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    {isTh
+                      ? "💡 ใช้ปืนสแกนยิงใส่ช่องนี้ได้ทันที หรือกด 'สุ่มรหัส' หากเป็นสินค้าทำเอง"
+                      : "Scan with gun directly or click Auto-Gen"}
+                  </p>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    {isTh ? "รหัส PLU (สำหรับตาชั่ง/ปุ่มด่วน)" : "PLU Code (Optional)"}
+                  </label>
+                  <input
+                    type="text"
+                    value={formPlu}
+                    onChange={(e) => setFormPlu(e.target.value)}
+                    placeholder="เช่น 1001"
+                    className="w-full h-9 px-3 rounded-xl border border-slate-300 font-mono text-xs focus:outline-none focus:border-emerald-600"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    {isTh
+                      ? "สำหรับสินค้าชั่งน้ำหนัก หรือปุ่มสัมผัสหน้าเคาน์เตอร์"
+                      : "Used for scale weight items or fast keys"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    {isTh ? "หมวดหมู่" : "Category"}
+                  </label>
+                  <select
+                    value={formCategory}
+                    onChange={(e) =>
+                      setFormCategory(e.target.value as CatalogProduct["category"])
+                    }
+                    className="w-full h-9 px-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-600 bg-white"
+                  >
+                    <option value="Dairy">Dairy</option>
+                    <option value="Ready Meal">Ready Meal</option>
+                    <option value="Beverages">Beverages</option>
+                    <option value="Snacks">Snacks</option>
+                    <option value="Meat & Fresh">Meat & Fresh</option>
+                    <option value="Bakery">Bakery</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    {isTh ? "รูปแบบการขาย" : "Sale Type"}
+                  </label>
+                  <select
+                    value={formSaleType}
+                    onChange={(e) =>
+                      setFormSaleType(e.target.value as "UNIT" | "WEIGHT")
+                    }
+                    className="w-full h-9 px-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-600 bg-white"
+                  >
+                    <option value="UNIT">{isTh ? "นับชิ้น (UNIT)" : "By Unit"}</option>
+                    <option value="WEIGHT">{isTh ? "ชั่งน้ำหนัก (WEIGHT)" : "By Weight"}</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    {isTh ? "หน่วยนับ" : "Unit Label"}
+                  </label>
+                  <input
+                    type="text"
+                    value={formUnit}
+                    onChange={(e) => setFormUnit(e.target.value)}
+                    placeholder="ขวด / ซอง / กก."
+                    className="w-full h-9 px-3 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-600"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    {isTh ? "ราคาขายปลีก (฿) *" : "Retail Price (THB) *"}
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={formPrice}
+                    onChange={(e) => setFormPrice(e.target.value)}
+                    className="w-full h-9 px-3 rounded-xl border border-slate-300 font-mono font-bold text-slate-900 focus:outline-none focus:border-emerald-600"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    {isTh ? "ต้นทุนเฉลี่ย (฿)" : "Cost Price (THB)"}
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formCost}
+                    onChange={(e) => setFormCost(e.target.value)}
+                    className="w-full h-9 px-3 rounded-xl border border-slate-300 font-mono text-slate-600 focus:outline-none focus:border-emerald-600"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    {isTh ? "จำนวนสต็อกตั้งต้น" : "Initial Stock"}
+                  </label>
+                  <input
+                    type="number"
+                    value={formStock}
+                    onChange={(e) => setFormStock(e.target.value)}
+                    className="w-full h-9 px-3 rounded-xl border border-slate-300 font-mono focus:outline-none focus:border-emerald-600"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  {isTh ? "ลิงก์รูปภาพสินค้า (Image URL)" : "Image URL"}
+                </label>
+                <input
+                  type="text"
+                  value={formImageUrl}
+                  onChange={(e) => setFormImageUrl(e.target.value)}
+                  className="w-full h-9 px-3 rounded-xl border border-slate-300 font-mono text-[11px] text-slate-600 focus:outline-none focus:border-emerald-600"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="isQuickKey"
+                  checked={formIsQuickKey}
+                  onChange={(e) => setFormIsQuickKey(e.target.checked)}
+                  className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer"
+                />
+                <label htmlFor="isQuickKey" className="font-bold text-slate-800 cursor-pointer">
+                  {isTh
+                    ? "ตั้งเป็นปุ่มสินค้าขายด่วนบนหน้าจอ POS (Quick Key)"
+                    : "Show as Fast-Pick button on POS screen"}
+                </label>
+              </div>
+
+              <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer"
+                >
+                  {isTh ? "ยกเลิก" : "Cancel"}
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-[#84cc16] hover:bg-[#65a30d] text-[#061a12] font-black cursor-pointer shadow-sm"
+                >
+                  {isTh ? "บันทึกสินค้า" : "Save Product"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* CSV IMPORT/EXPORT MODAL */}
+      {isCsvModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 font-sans select-none animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <FileSpreadsheet className="h-5 w-5 text-emerald-600" />
+                <span>Import / Export CSV</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsCsvModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-6 border-2 border-dashed border-slate-300 rounded-2xl text-center space-y-2 bg-slate-50">
+              <Upload className="h-8 w-8 text-slate-400 mx-auto" />
+              <div className="text-xs font-bold text-slate-800">
+                {isTh ? "ลากไฟล์ CSV หรือ Excel วางที่นี่" : "Drag & Drop CSV file here"}
+              </div>
+              <div className="text-[11px] text-slate-500">
+                {isTh ? "รองรับบาร์โค้ด ชื่อสินค้า ราคาขาย และต้นทุน" : "Supports barcodes, SKU, retail price, cost"}
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  alert(isTh ? "ดาวน์โหลดไฟล์แม่แบบ CSV สำเร็จ" : "Template CSV downloaded");
+                  setIsCsvModalOpen(false);
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Download className="h-4 w-4" />
+                <span>{isTh ? "ดาวน์โหลดแม่แบบ" : "Download Template"}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  alert(isTh ? "ส่งออกรายการสินค้า 8 รายการเป็น CSV สำเร็จ" : "Exported 8 products to CSV");
+                  setIsCsvModalOpen(false);
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-[#84cc16] hover:bg-[#65a30d] text-[#061a12] text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                <span>{isTh ? "ส่งออกข้อมูล CSV" : "Export Products"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
