@@ -16,6 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Kipp Market — Retail POS & Store Management",
   description: "Retail Management & POS System for Convenience Stores",
+  manifest: "/manifest.json",
 };
 
 export default function RootLayout({
