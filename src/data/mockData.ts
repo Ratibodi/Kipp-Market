@@ -580,6 +580,69 @@ export interface ExpenseRecord {
   note: string;
 }
 
+export type MovementType = "EXPENSE" | "INFLOW";
+
+export type InflowCategory =
+  | "Side Business"
+  | "Owner Working Capital"
+  | "Storefront Rental"
+  | "Vending Commission"
+  | "Rebate & Scrap Sales"
+  | "Shift Cash Float"
+  | "Miscellaneous Inflow";
+
+export interface FinancialMovementRecord {
+  id: string;
+  docNo: string;
+  type: MovementType;
+  category: string;
+  categoryTh: string;
+  amount: number;
+  date: string;
+  destinationOrSource: "DRAWER" | "BANK";
+  shiftId?: string;
+  recordedBy: string;
+  note: string;
+}
+
+export function calculateFinancialSummary(
+  grossSales: number,
+  cogs: number,
+  records: FinancialMovementRecord[]
+) {
+  const totalExpenses = records
+    .filter((r) => r.type === "EXPENSE")
+    .reduce((sum, r) => sum + r.amount, 0);
+
+  const totalInflows = records
+    .filter((r) => r.type === "INFLOW")
+    .reduce((sum, r) => sum + r.amount, 0);
+
+  const drawerExpenses = records
+    .filter((r) => r.type === "EXPENSE" && r.destinationOrSource === "DRAWER")
+    .reduce((sum, r) => sum + r.amount, 0);
+
+  const drawerInflows = records
+    .filter((r) => r.type === "INFLOW" && r.destinationOrSource === "DRAWER")
+    .reduce((sum, r) => sum + r.amount, 0);
+
+  const grossProfit = grossSales - cogs;
+  const netProfit = grossProfit - totalExpenses;
+  const netSurplus = netProfit + totalInflows;
+
+  return {
+    grossSales,
+    cogs,
+    grossProfit,
+    totalExpenses,
+    totalInflows,
+    drawerExpenses,
+    drawerInflows,
+    netProfit,
+    netSurplus,
+  };
+}
+
 export const MOCK_EXPENSES: ExpenseRecord[] = [
   {
     id: "exp-1",
@@ -614,6 +677,71 @@ export const MOCK_EXPENSES: ExpenseRecord[] = [
     date: "2026-06-10 10:00",
     paidFromDrawer: false,
     spentBy: "ระทิบ ม.",
+    note: "โอนชำระการไฟฟ้านครหลวง",
+  },
+];
+
+export const MOCK_FINANCIAL_MOVEMENTS: FinancialMovementRecord[] = [
+  {
+    id: "inf-1",
+    docNo: "INF-202606-003",
+    type: "INFLOW",
+    category: "Side Business",
+    categoryTh: "เงินทุนจากธุรกิจเสริม",
+    amount: 15000.0,
+    date: "2026-06-14 13:40",
+    destinationOrSource: "BANK",
+    recordedBy: "สมชาย พ.",
+    note: "กำไรจากร้านกาแฟนำมาเติมซื้อสต็อกสินค้าเข้าร้าน",
+  },
+  {
+    id: "exp-1",
+    docNo: "EXP-202606-018",
+    type: "EXPENSE",
+    category: "Ice & Cold Store",
+    categoryTh: "ค่าน้ำแข็งหลอดหน้าร้าน",
+    amount: 150.0,
+    date: "2026-06-14 11:20",
+    destinationOrSource: "DRAWER",
+    shiftId: "SHIFT-01-MORNING",
+    recordedBy: "สมชาย พ.",
+    note: "น้ำแข็งหลอดใหญ่ 3 ถุง สำหรับตู้เครื่องดื่มเย็น",
+  },
+  {
+    id: "inf-2",
+    docNo: "INF-202606-002",
+    type: "INFLOW",
+    category: "Storefront Rental",
+    categoryTh: "รายได้ค่าเช่าพื้นที่หน้าร้าน",
+    amount: 3500.0,
+    date: "2026-06-14 09:30",
+    destinationOrSource: "DRAWER",
+    recordedBy: "สมชาย พ.",
+    note: "ค่าเช่าแผงหมูปิ้งหน้าร้านประจำเดือน",
+  },
+  {
+    id: "exp-2",
+    docNo: "EXP-202606-017",
+    type: "EXPENSE",
+    category: "Store Supplies",
+    categoryTh: "ถุงหูหิ้วและกระดาษพิมพ์สลิป",
+    amount: 480.0,
+    date: "2026-06-13 16:45",
+    destinationOrSource: "DRAWER",
+    shiftId: "SHIFT-01-AFTERNOON",
+    recordedBy: "ณัฐพร ก.",
+    note: "กระดาษความร้อน 80mm จำนวน 10 ม้วน",
+  },
+  {
+    id: "exp-3",
+    docNo: "EXP-202606-016",
+    type: "EXPENSE",
+    category: "Utilities",
+    categoryTh: "ค่าไฟฟ้าประจำเดือนมิถุนายน (งวด 1)",
+    amount: 4500.0,
+    date: "2026-06-10 10:00",
+    destinationOrSource: "BANK",
+    recordedBy: "ระทิบ ม.",
     note: "โอนชำระการไฟฟ้านครหลวง",
   },
 ];
