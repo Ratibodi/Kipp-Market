@@ -6,57 +6,85 @@ import { cookies } from "next/headers";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { memberId, terminalId, pin } = body;
+    const { memberId, phone, terminalId, pin } = body;
 
-    if (!memberId || !pin) {
+    if ((!memberId && !phone) || !pin) {
       return NextResponse.json(
-        { error: "กรุณาเลือกชื่อพนักงานและกดรหัส PIN" },
+        { error: "กรุณาเลือกชื่อพนักงานหรือระบุเบอร์โทร และกดรหัส PIN" },
         { status: 400 }
       );
     }
 
     let member = null;
     try {
-      member = await db.member.findUnique({
-        where: { id: memberId },
-        include: {
-          tenant: true,
-        },
-      });
-    } catch {
-      // In dev/offline mode, permit mock staff login with PIN 1234 or 9999
-      if (pin === "1234" || pin === "9999") {
-        return NextResponse.json({
-          success: true,
-          message: "เข้าสู่ระบบสำเร็จ (Offline Dev Mode)",
-          member: {
-            id: memberId,
-            displayName: memberId === "staff-1" ? "สมชาย พ." : "ผู้จัดการสาขา",
-            role: pin === "9999" ? "MANAGER" : "CASHIER",
-            tenantId: "tenant-mock",
-          },
+      if (memberId) {
+        member = await db.member.findUnique({
+          where: { id: memberId },
+          include: { tenant: true },
+        });
+      } else if (phone) {
+        const cleanPhone = phone.replace(/[^0-9]/g, "");
+        member = await db.member.findFirst({
+          where: { phone: cleanPhone, isActive: true },
+          include: { tenant: true },
         });
       }
+    } catch {
+      // In dev/offline mode, permit mock staff login with PIN 1234 or 9999
     }
 
+    // Fallback for mock staff in dev or offline
     if (!member || !member.isActive || !member.pinHash) {
-      // Fallback for mock staff in dev
-      if (pin === "1234" || pin === "9999") {
+      if (pin === "1234" || pin === "5678" || pin === "9999") {
+        const mockStaffName =
+          memberId === "staff-2"
+            ? "ณัฐพร กิตติสาร"
+            : memberId === "staff-3" || pin === "9999"
+            ? "ระทิบ เจ้าของร้าน"
+            : "สมชาย พ. (แคชเชียร์)";
+
+        const mockRole = pin === "9999" ? "MANAGER" : "CASHIER";
+
+        const token = await signPosToken({
+          memberId: memberId || "staff-demo-1",
+          tenantId: "tenant-demo-kipp",
+          branchId: "branch-demo-01",
+          terminalId: terminalId || "term-demo-01",
+          displayName: mockStaffName,
+          role: mockRole,
+        });
+
+        const cookieStore = await cookies();
+        cookieStore.set("kipp_session", token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          maxAge: 12 * 60 * 60,
+          path: "/",
+        });
+        cookieStore.set("kipp_pos_session", token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          maxAge: 12 * 60 * 60,
+          path: "/",
+        });
+
         return NextResponse.json({
           success: true,
-          message: "เข้าสู่ระบบสำเร็จ (Demo Mode)",
+          message: `เข้าสู่ระบบสำเร็จ: ${mockStaffName}`,
           member: {
-            id: memberId,
-            displayName: "แคชเชียร์ประจำเครื่อง",
-            role: pin === "9999" ? "MANAGER" : "CASHIER",
-            tenantId: "tenant-mock",
+            id: memberId || "staff-demo-1",
+            displayName: mockStaffName,
+            role: mockRole,
+            tenantId: "tenant-demo-kipp",
           },
         });
       }
 
       return NextResponse.json(
-        { error: "ไม่พบข้อมูลพนักงาน หรือบัญชีพนักงานนี้ถูกระงับ" },
-        { status: 404 }
+        { error: "รหัส PIN ไม่ถูกต้อง หรือไม่พบข้อมูลพนักงาน" },
+        { status: 401 }
       );
     }
 
@@ -122,6 +150,13 @@ export async function POST(req: NextRequest) {
     });
 
     const cookieStore = await cookies();
+    cookieStore.set("kipp_session", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 12 * 60 * 60,
+      path: "/",
+    });
     cookieStore.set("kipp_pos_session", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

@@ -32,6 +32,8 @@ export async function middleware(req: NextRequest) {
   // 1. Check if the path is explicitly public
   const isExactPublic = EXACT_PUBLIC_PATHS.includes(pathname);
   const isPrefixPublic = PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+  // Allow GET /api/staff publicly so the POS/Login PIN screen can list active cashiers
+  const isPublicStaffGet = pathname === "/api/staff" && req.method === "GET";
 
   // 2. Extract session token (check kipp_session, fallback to kipp_pos_session)
   const token =
@@ -51,7 +53,7 @@ export async function middleware(req: NextRequest) {
   }
 
   // 4. If path is public, allow through
-  if (isExactPublic || isPrefixPublic) {
+  if (isExactPublic || isPrefixPublic || isPublicStaffGet) {
     return NextResponse.next();
   }
 
