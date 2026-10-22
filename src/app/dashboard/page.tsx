@@ -98,7 +98,6 @@ export default function ManagerDashboardPage() {
 
             {/* Filter and Export Controls */}
             <div className="flex flex-wrap items-center gap-2.5">
-
               <button
                 type="button"
                 className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs transition"
@@ -119,6 +118,34 @@ export default function ManagerDashboardPage() {
               </button>
             </div>
           </div>
+
+          {/* Welcome Banner for Fresh Store with 0 sales */}
+          {overview?.summary.totalTransactions === 0 && (
+            <div className="bg-gradient-to-r from-emerald-500/10 via-emerald-400/5 to-transparent border border-emerald-500/30 rounded-3xl p-5 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold text-xl shadow-sm">
+                  🏪
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">
+                    {isTh ? "ยินดีต้อนรับสู่ร้านค้าของคุณ! (ร้านใหม่พร้อมใช้งาน 100%)" : "Welcome to Your Store!"}
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {isTh
+                      ? "ยังไม่มียอดขายในวันนี้ สามารถเพิ่มสินค้าในแคตตาล็อก และเปิดกะเพื่อเริ่มคิดเงินบิลแรกที่หน้า POS ได้ทันที"
+                      : "No sales recorded yet today. Add products and start your first sale on POS."}
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/pos"
+                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition flex items-center gap-1.5"
+              >
+                <span>{isTh ? "เริ่มขายบิลแรกที่หน้า POS" : "Go to POS Terminal"}</span>
+                <span>→</span>
+              </Link>
+            </div>
+          )}
 
           {/* 4 Top KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

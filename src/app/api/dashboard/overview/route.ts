@@ -45,7 +45,20 @@ export interface DashboardOverviewResponse {
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const tenantId = searchParams.get("tenantId") || undefined;
+    let tenantId = searchParams.get("tenantId") || request.headers.get("x-tenant-id") || undefined;
+
+    if (!tenantId) {
+      const token =
+        request.cookies.get("kipp_session")?.value ||
+        request.cookies.get("kipp_pos_session")?.value;
+      if (token) {
+        const { verifyPosToken } = await import("@/lib/auth/jwt");
+        const session = await verifyPosToken(token);
+        if (session) tenantId = session.tenantId;
+      }
+    }
+
+    const isDemo = !tenantId || tenantId.includes("demo");
 
     const userRole = request.headers.get("x-member-role");
     const userBranchId = request.headers.get("x-branch-id");
@@ -230,6 +243,46 @@ export async function GET(request: NextRequest) {
         },
         topCategories,
         recentSales,
+        isLiveDb: true,
+      });
+    }
+
+    // For real newly registered stores (not demo), start completely clean from 0!
+    if (!isDemo && todaySales.length === 0) {
+      const cleanHourlyPoints: HourlySalesPoint[] = [
+        { hour: 6, label: "06:00", actualRevenue: 0, yesterdayRevenue: 0 },
+        { hour: 8, label: "08:00", actualRevenue: 0, yesterdayRevenue: 0 },
+        { hour: 10, label: "10:00", actualRevenue: 0, yesterdayRevenue: 0 },
+        { hour: 12, label: "12:00", actualRevenue: 0, yesterdayRevenue: 0 },
+        { hour: 14, label: "14:00", actualRevenue: 0, yesterdayRevenue: 0 },
+        { hour: 16, label: "16:00", actualRevenue: null, projectedRevenue: 0, yesterdayRevenue: 0 },
+        { hour: 18, label: "18:00", actualRevenue: null, projectedRevenue: 0, yesterdayRevenue: 0 },
+        { hour: 20, label: "20:00", actualRevenue: null, projectedRevenue: 0, yesterdayRevenue: 0 },
+        { hour: 22, label: "22:00", actualRevenue: null, projectedRevenue: 0, yesterdayRevenue: 0 },
+      ];
+
+      return NextResponse.json<DashboardOverviewResponse>({
+        summary: {
+          grossSales: 0,
+          yesterdayGrossSales: 0,
+          growthPercent: 0,
+          grossProfit: 0,
+          profitMarginPercent: 0,
+          totalTransactions: 0,
+          avgBasketSize: 0,
+          peakVelocity: "-",
+          transPerHour: 0,
+        },
+        hourlyPoints: cleanHourlyPoints,
+        currentHourDecimal,
+        paymentDistribution: {
+          promptpay: 0,
+          cash: 0,
+          creditCard: 0,
+          trueMoney: 0,
+        },
+        topCategories: [],
+        recentSales: [],
         isLiveDb: true,
       });
     }

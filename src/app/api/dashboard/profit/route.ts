@@ -60,7 +60,20 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const period = searchParams.get("period") || "7d";
-    const tenantId = searchParams.get("tenantId") || undefined;
+    let tenantId = searchParams.get("tenantId") || request.headers.get("x-tenant-id") || undefined;
+
+    if (!tenantId) {
+      const token =
+        request.cookies.get("kipp_session")?.value ||
+        request.cookies.get("kipp_pos_session")?.value;
+      if (token) {
+        const { verifyPosToken } = await import("@/lib/auth/jwt");
+        const session = await verifyPosToken(token);
+        if (session) tenantId = session.tenantId;
+      }
+    }
+
+    const isDemo = !tenantId || tenantId.includes("demo");
 
     const userRole = request.headers.get("x-member-role");
     const userBranchId = request.headers.get("x-branch-id");
@@ -299,6 +312,32 @@ export async function GET(request: NextRequest) {
         dailyTrend,
         categoryBreakdown,
         topProfitDrivers,
+        branchFilter: branchFilterObj,
+      });
+    }
+
+    // For real newly registered stores (not demo), start completely clean from 0!
+    if (!isDemo && liveSales.length === 0) {
+      return NextResponse.json({
+        period,
+        startDate: startDate.toISOString().slice(0, 10),
+        endDate: now.toISOString().slice(0, 10),
+        summary: {
+          grossSales: 0,
+          vatAmount: 0,
+          netRevenue: 0,
+          cogs: 0,
+          grossProfit: 0,
+          grossMarginPercent: 0,
+          totalExpenses: 0,
+          netProfit: 0,
+          netMarginPercent: 0,
+          totalOrders: 0,
+          avgBasketProfit: 0,
+        },
+        dailyTrend: [],
+        categoryBreakdown: [],
+        topProfitDrivers: [],
         branchFilter: branchFilterObj,
       });
     }
