@@ -190,6 +190,17 @@ export function DashboardSidebar() {
               {isTh ? "การตั้งค่า & แพลตฟอร์ม" : "Settings & Platform"}
             </div>
             <Link
+              href="/dashboard/staff"
+              className={`flex items-center gap-2.5 px-3 py-1.5 rounded-xl transition ${
+                pathname.startsWith("/dashboard/staff")
+                  ? "bg-[#bef264] text-[#061a12] font-bold shadow-sm"
+                  : "text-slate-300 hover:text-white hover:bg-[#0c2e20]"
+              }`}
+            >
+              <Users className="h-4 w-4" />
+              <span>{isTh ? "จัดการพนักงาน & แคชเชียร์" : "Staff & Cashiers"}</span>
+            </Link>
+            <Link
               href="/dashboard/settings"
               className={`flex items-center gap-2.5 px-3 py-1.5 rounded-xl transition ${
                 pathname.startsWith("/dashboard/settings")
