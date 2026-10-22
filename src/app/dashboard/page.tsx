@@ -98,14 +98,6 @@ export default function ManagerDashboardPage() {
 
             {/* Filter and Export Controls */}
             <div className="flex flex-wrap items-center gap-2.5">
-              <button
-                type="button"
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs transition"
-              >
-                <Store className="h-3.5 w-3.5 text-slate-500" />
-                <span>{isTh ? "สาขา #01 - สุขุมวิท ซอย 24" : "Store #01 - Sukhumvit Soi 24"}</span>
-                <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
-              </button>
 
               <button
                 type="button"
