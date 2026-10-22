@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Plus,
   Receipt,
@@ -31,6 +31,24 @@ export default function ExpensesPage() {
 
   const [records, setRecords] = useState<FinancialMovementRecord[]>(MOCK_FINANCIAL_MOVEMENTS);
   const [filterTab, setFilterTab] = useState<"all" | "inflow" | "expense">("all");
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // Load from API on mount
+  const loadMovements = () => {
+    fetch("/api/expenses")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.movements && Array.isArray(data.movements)) {
+          setRecords(data.movements);
+        }
+      })
+      .catch((err) => console.warn("Failed to load expenses from API:", err))
+      .finally(() => setIsLoading(false));
+  };
+
+  useEffect(() => {
+    loadMovements();
+  }, []);
 
   // Modal States
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState<boolean>(false);
@@ -68,7 +86,7 @@ export default function ExpensesPage() {
   const expenseCount = records.filter((r) => r.type === "EXPENSE").length;
 
   // Handlers
-  const handleAddExpense = (e: React.FormEvent) => {
+  const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     const amount = parseFloat(expenseAmount) || 0;
     const newRecord: FinancialMovementRecord = {
@@ -84,13 +102,34 @@ export default function ExpensesPage() {
       recordedBy: isTh ? "สมชาย พ." : "Somchai P.",
       note: expenseNote || (isTh ? "บันทึกค่าใช้จ่ายร้านค้า" : "Store expense"),
     };
+
+    // Optimistic UI update
     setRecords([newRecord, ...records]);
     setExpenseAmount("350.00");
     setExpenseNote("");
     setIsExpenseModalOpen(false);
+
+    // Persist to API
+    try {
+      await fetch("/api/expenses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "EXPENSE",
+          category: expenseCategory,
+          categoryTh: expenseCategoryTh || expenseCategory,
+          amount,
+          destinationOrSource: expensePaidFromDrawer ? "DRAWER" : "BANK",
+          note: expenseNote || (isTh ? "บันทึกค่าใช้จ่ายร้านค้า" : "Store expense"),
+        }),
+      });
+      loadMovements();
+    } catch (err) {
+      console.warn("Could not persist expense to API:", err);
+    }
   };
 
-  const handleAddInflow = (e: React.FormEvent) => {
+  const handleAddInflow = async (e: React.FormEvent) => {
     e.preventDefault();
     const amount = parseFloat(inflowAmount) || 0;
     const newRecord: FinancialMovementRecord = {
@@ -106,10 +145,31 @@ export default function ExpensesPage() {
       recordedBy: isTh ? "สมชาย พ." : "Somchai P.",
       note: inflowNote || (isTh ? "รับเงินนอกเข้าเติมทุนร้านค้า" : "External capital injection"),
     };
+
+    // Optimistic UI update
     setRecords([newRecord, ...records]);
     setInflowAmount("5000.00");
     setInflowNote("");
     setIsInflowModalOpen(false);
+
+    // Persist to API
+    try {
+      await fetch("/api/expenses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "INFLOW",
+          category: inflowCategory,
+          categoryTh: inflowCategoryTh || inflowCategory,
+          amount,
+          destinationOrSource: inflowDestination,
+          note: inflowNote || (isTh ? "รับเงินนอกเข้าเติมทุนร้านค้า" : "External capital injection"),
+        }),
+      });
+      loadMovements();
+    } catch (err) {
+      console.warn("Could not persist inflow to API:", err);
+    }
   };
 
   return (
