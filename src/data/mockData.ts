@@ -333,7 +333,7 @@ export interface CatalogProduct {
   plu?: string;
   nameTh: string;
   nameEn: string;
-  category: "Dairy" | "Ready Meal" | "Beverages" | "Snacks" | "Meat & Fresh" | "Bakery";
+  category: "Dairy" | "Ready Meal" | "Beverages" | "Snacks" | "Meat & Fresh" | "Bakery" | string;
   saleType: "UNIT" | "WEIGHT";
   unit: string;
   price: number;

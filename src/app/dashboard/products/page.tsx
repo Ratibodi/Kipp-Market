@@ -38,12 +38,38 @@ export default function ProductsPage() {
   const [isCsvModalOpen, setIsCsvModalOpen] = useState<boolean>(false);
   const [editingProduct, setEditingProduct] = useState<CatalogProduct | null>(null);
 
+  const [categoriesList, setCategoriesList] = useState<string[]>([
+    "Dairy",
+    "Ready Meal",
+    "Beverages",
+    "Snacks",
+    "Meat & Fresh",
+    "Bakery",
+  ]);
+  const [isAddingNewCategory, setIsAddingNewCategory] = useState<boolean>(false);
+  const [newCategoryName, setNewCategoryName] = useState<string>("");
+
+  const getCategoryLabel = (cat: string) => {
+    if (cat === "ALL") return isTh ? "ทุกหมวดหมู่" : "All Categories";
+    if (cat === "Dairy") return isTh ? "นมและเนย (Dairy)" : "Dairy";
+    if (cat === "Ready Meal") return isTh ? "อาหารพร้อมทาน (Ready Meal)" : "Ready Meal";
+    if (cat === "Beverages") return isTh ? "เครื่องดื่ม (Beverages)" : "Beverages";
+    if (cat === "Snacks") return isTh ? "ขนมขบเคี้ยว (Snacks)" : "Snacks";
+    if (cat === "Meat & Fresh") return isTh ? "ของสด & ผักผลไม้ (Fresh)" : "Meat & Fresh";
+    if (cat === "Bakery") return isTh ? "เบเกอรี่ (Bakery)" : "Bakery";
+    return cat;
+  };
+
+  const allCategories = Array.from(
+    new Set(["ALL", ...categoriesList, ...products.map((p) => p.category)])
+  );
+
   // Form State
   const [formNameTh, setFormNameTh] = useState("");
   const [formNameEn, setFormNameEn] = useState("");
   const [formBarcode, setFormBarcode] = useState("");
   const [formPlu, setFormPlu] = useState("");
-  const [formCategory, setFormCategory] = useState<CatalogProduct["category"]>("Beverages");
+  const [formCategory, setFormCategory] = useState<string>("Beverages");
   const [formSaleType, setFormSaleType] = useState<"UNIT" | "WEIGHT">("UNIT");
   const [formUnit, setFormUnit] = useState("ชิ้น");
   const [formPrice, setFormPrice] = useState("25.00");
@@ -70,6 +96,8 @@ export default function ProductsPage() {
   });
 
   const handleOpenAddModal = (prod?: CatalogProduct) => {
+    setIsAddingNewCategory(false);
+    setNewCategoryName("");
     if (prod) {
       setEditingProduct(prod);
       setFormNameTh(prod.nameTh);
@@ -84,6 +112,9 @@ export default function ProductsPage() {
       setFormStock(prod.stockQty.toString());
       setFormIsQuickKey(prod.isQuickKey);
       setFormImageUrl(prod.imageUrl);
+      if (!categoriesList.includes(prod.category)) {
+        setCategoriesList((prev) => [...prev, prod.category]);
+      }
     } else {
       setEditingProduct(null);
       setFormNameTh("");
@@ -106,6 +137,17 @@ export default function ProductsPage() {
 
   const handleSaveProduct = (e: React.FormEvent) => {
     e.preventDefault();
+    const finalCategory =
+      isAddingNewCategory && newCategoryName.trim()
+        ? newCategoryName.trim()
+        : formCategory;
+
+    if (isAddingNewCategory && newCategoryName.trim()) {
+      if (!categoriesList.includes(newCategoryName.trim())) {
+        setCategoriesList((prev) => [...prev, newCategoryName.trim()]);
+      }
+    }
+
     if (editingProduct) {
       setProducts((prev) =>
         prev.map((item) =>
@@ -116,7 +158,7 @@ export default function ProductsPage() {
                 nameEn: formNameEn,
                 barcode: formBarcode,
                 plu: formPlu || undefined,
-                category: formCategory,
+                category: finalCategory,
                 saleType: formSaleType,
                 unit: formUnit,
                 price: parseFloat(formPrice) || 0,
@@ -136,7 +178,7 @@ export default function ProductsPage() {
         plu: formPlu || undefined,
         nameTh: formNameTh,
         nameEn: formNameEn || formNameTh,
-        category: formCategory,
+        category: finalCategory,
         saleType: formSaleType,
         unit: formUnit,
         price: parseFloat(formPrice) || 0,
@@ -265,22 +307,29 @@ export default function ProductsPage() {
             </div>
 
             <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
-              {["ALL", "Dairy", "Ready Meal", "Beverages", "Snacks", "Meat & Fresh", "Bakery"].map(
-                (cat) => (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => setSelectedCategory(cat)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
-                      selectedCategory === cat
-                        ? "bg-slate-900 text-white shadow-2xs"
-                        : "bg-slate-100 hover:bg-slate-200 text-slate-600"
-                    }`}
-                  >
-                    {cat === "ALL" ? (isTh ? "ทุกหมวดหมู่" : "All Categories") : cat}
-                  </button>
-                )
-              )}
+              {allCategories.map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                    selectedCategory === cat
+                      ? "bg-slate-900 text-white shadow-2xs"
+                      : "bg-slate-100 hover:bg-slate-200 text-slate-600"
+                  }`}
+                >
+                  {getCategoryLabel(cat)}
+                </button>
+              ))}
+
+              <button
+                type="button"
+                onClick={() => handleOpenAddModal()}
+                className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition whitespace-nowrap cursor-pointer flex items-center gap-1"
+                title={isTh ? "เพิ่มสินค้าหรือหมวดหมู่ใหม่" : "Add Product or Category"}
+              >
+                <span>+ {isTh ? "หมวดใหม่" : "New Cat"}</span>
+              </button>
             </div>
           </div>
 
@@ -534,19 +583,49 @@ export default function ProductsPage() {
                     {isTh ? "หมวดหมู่" : "Category"}
                   </label>
                   <select
-                    value={formCategory}
-                    onChange={(e) =>
-                      setFormCategory(e.target.value as CatalogProduct["category"])
-                    }
-                    className="w-full h-9 px-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-600 bg-white"
+                    value={isAddingNewCategory ? "__NEW__" : formCategory}
+                    onChange={(e) => {
+                      if (e.target.value === "__NEW__") {
+                        setIsAddingNewCategory(true);
+                        setNewCategoryName("");
+                      } else {
+                        setIsAddingNewCategory(false);
+                        setFormCategory(e.target.value);
+                      }
+                    }}
+                    className="w-full h-9 px-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-600 bg-white text-xs font-medium"
                   >
-                    <option value="Dairy">Dairy</option>
-                    <option value="Ready Meal">Ready Meal</option>
-                    <option value="Beverages">Beverages</option>
-                    <option value="Snacks">Snacks</option>
-                    <option value="Meat & Fresh">Meat & Fresh</option>
-                    <option value="Bakery">Bakery</option>
+                    {categoriesList.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {getCategoryLabel(cat)}
+                      </option>
+                    ))}
+                    <option value="__NEW__">{isTh ? "+ เพิ่มหมวดหมู่ใหม่..." : "+ Add Custom Category..."}</option>
                   </select>
+
+                  {isAddingNewCategory && (
+                    <div className="mt-1.5 flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        required
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        placeholder={isTh ? "พิมพ์ชื่อหมวด เช่น เครื่องสำอาง" : "Category name"}
+                        className="w-full h-8 px-2.5 rounded-lg border border-emerald-500 bg-emerald-50/50 text-xs focus:outline-none focus:bg-white"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAddingNewCategory(false);
+                          setNewCategoryName("");
+                        }}
+                        className="px-2 py-1 rounded bg-slate-200 hover:bg-slate-300 text-[10px] font-bold text-slate-700 shrink-0"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
