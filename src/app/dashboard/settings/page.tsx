@@ -15,6 +15,11 @@ import {
   Smartphone,
   Sparkles,
   Loader2,
+  Building2,
+  Plus,
+  MapPin,
+  X,
+  AlertCircle,
 } from "lucide-react";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
@@ -24,11 +29,32 @@ import {
   formatPromptPayDisplay,
 } from "@/lib/promptpay";
 
+interface BranchItem {
+  id: string;
+  name: string;
+  code: string;
+  address: string;
+  isActive: boolean;
+  terminalsCount: number;
+  createdAt: string;
+}
+
 export default function SettingsPage() {
   const { t, language } = useLanguage();
   const isTh = language === "th";
 
-  const [activeTab, setActiveTab] = useState<"PROMPTPAY" | "SCALE" | "TERMINALS">("PROMPTPAY");
+  const [activeTab, setActiveTab] = useState<"BRANCHES" | "PROMPTPAY" | "SCALE" | "TERMINALS">("BRANCHES");
+
+  // Branches State
+  const [branches, setBranches] = useState<BranchItem[]>([]);
+  const [isLoadingBranches, setIsLoadingBranches] = useState<boolean>(false);
+  const [isAddBranchModalOpen, setIsAddBranchModalOpen] = useState<boolean>(false);
+  const [newBranchName, setNewBranchName] = useState<string>("");
+  const [newBranchCode, setNewBranchCode] = useState<string>("");
+  const [newBranchAddress, setNewBranchAddress] = useState<string>("");
+  const [isSubmittingBranch, setIsSubmittingBranch] = useState<boolean>(false);
+  const [branchToast, setBranchToast] = useState<string | null>(null);
+  const [branchError, setBranchError] = useState<string | null>(null);
 
   // PromptPay Settings
   const [promptPayType, setPromptPayType] = useState<string>("PHONE");
@@ -48,8 +74,86 @@ export default function SettingsPage() {
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
+  const loadBranches = async () => {
+    setIsLoadingBranches(true);
+    try {
+      const res = await fetch("/api/branches");
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.branches && Array.isArray(data.branches)) {
+          setBranches(data.branches);
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to load branches:", err);
+    } finally {
+      setIsLoadingBranches(false);
+    }
+  };
+
+  const handleCreateBranch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmittingBranch(true);
+    setBranchError(null);
+    try {
+      const res = await fetch("/api/branches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newBranchName,
+          code: newBranchCode,
+          address: newBranchAddress,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setBranchError(data.error || "เกิดข้อผิดพลาดในการสร้างสาขา");
+      } else {
+        setBranchToast(data.message || "สร้างสาขาเรียบร้อยแล้ว");
+        setIsAddBranchModalOpen(false);
+        setNewBranchName("");
+        setNewBranchCode("");
+        setNewBranchAddress("");
+        loadBranches();
+      }
+    } catch {
+      setBranchError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
+    } finally {
+      setIsSubmittingBranch(false);
+      setTimeout(() => setBranchToast(null), 4000);
+    }
+  };
+
+  const handleToggleBranch = async (branch: BranchItem) => {
+    try {
+      const nextActive = !branch.isActive;
+      const res = await fetch("/api/branches", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: branch.id,
+          isActive: nextActive,
+        }),
+      });
+      if (res.ok) {
+        setBranchToast(
+          nextActive
+            ? `เปิดใช้งาน ${branch.name} เรียบร้อยแล้ว`
+            : `ระงับ ${branch.name} ชั่วคราวแล้ว`
+        );
+        loadBranches();
+      }
+    } catch {
+      setBranchError("เกิดข้อผิดพลาดในการปรับสถานะสาขา");
+    } finally {
+      setTimeout(() => setBranchToast(null), 4000);
+    }
+  };
+
+
   // Load existing payment settings on mount
   useEffect(() => {
+    loadBranches();
     async function loadSettings() {
       try {
         const res = await fetch("/api/settings/payment");
@@ -170,6 +274,19 @@ export default function SettingsPage() {
           <div className="flex border-b border-slate-200 text-xs font-bold gap-6">
             <button
               type="button"
+              onClick={() => setActiveTab("BRANCHES")}
+              className={`pb-3 flex items-center gap-2 border-b-2 transition cursor-pointer ${
+                activeTab === "BRANCHES"
+                  ? "border-emerald-600 text-emerald-700"
+                  : "border-transparent text-slate-500 hover:text-slate-900"
+              }`}
+            >
+              <Building2 className="h-4 w-4" />
+              <span>{isTh ? "1. สาขาร้านค้า (Branches)" : "1. Store Branches"}</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setActiveTab("PROMPTPAY")}
               className={`pb-3 flex items-center gap-2 border-b-2 transition cursor-pointer ${
                 activeTab === "PROMPTPAY"
@@ -178,7 +295,7 @@ export default function SettingsPage() {
               }`}
             >
               <QrCode className="h-4 w-4" />
-              <span>{isTh ? "1. ตั้งค่า PromptPay QR (สแกนจ่ายเงิน)" : "1. PromptPay QR"}</span>
+              <span>{isTh ? "2. PromptPay QR (สแกนจ่าย)" : "2. PromptPay QR"}</span>
             </button>
 
             <button
@@ -191,7 +308,7 @@ export default function SettingsPage() {
               }`}
             >
               <Scale className="h-4 w-4" />
-              <span>{isTh ? "2. บาร์โค้ดตาชั่ง (Scale EAN-13)" : "2. Scale Barcode"}</span>
+              <span>{isTh ? "3. บาร์โค้ดตาชั่ง (Scale EAN-13)" : "3. Scale Barcode"}</span>
             </button>
 
             <button
@@ -204,11 +321,153 @@ export default function SettingsPage() {
               }`}
             >
               <Monitor className="h-4 w-4" />
-              <span>{isTh ? "3. เครื่อง POS & Device Token" : "3. Terminals & Pairing"}</span>
+              <span>{isTh ? "4. เครื่อง POS & Device Token" : "4. Terminals & Pairing"}</span>
             </button>
           </div>
 
-          {/* TAB 1: PROMPTPAY SETTINGS */}
+          {/* Feedback Toasts for Branches */}
+          {branchToast && (
+            <div className="p-3 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+              <CheckCircle className="h-4 w-4 text-emerald-600" />
+              <span>{branchToast}</span>
+            </div>
+          )}
+          {branchError && (
+            <div className="p-3 rounded-xl bg-red-100 border border-red-300 text-red-900 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+              <AlertCircle className="h-4 w-4 text-red-600" />
+              <span>{branchError}</span>
+            </div>
+          )}
+
+          {/* TAB 1: BRANCHES MANAGEMENT */}
+          {activeTab === "BRANCHES" && (
+            <div className="space-y-6">
+              {/* Top Action Bar */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 bg-white rounded-3xl border border-slate-200 shadow-2xs">
+                <div>
+                  <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
+                    <Building2 className="h-5 w-5 text-emerald-600" />
+                    <span>{isTh ? "สาขาร้านค้าทั้งหมด" : "All Store Branches"}</span>
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {isTh
+                      ? "เพิ่มและจัดการสาขาของร้านค้า เชื่อมต่อเครื่องคิดเงิน POS และแยกยอดขายตามสาขา"
+                      : "Add and manage multiple retail branches with distinct POS terminals"}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsAddBranchModalOpen(true)}
+                  className="px-4 py-2.5 rounded-xl bg-[#84cc16] hover:bg-[#65a30d] text-[#061a12] text-xs font-black transition flex items-center gap-1.5 shadow-sm cursor-pointer self-start sm:self-auto"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>{isTh ? "+ เพิ่มสาขาใหม่" : "+ Add New Branch"}</span>
+                </button>
+              </div>
+
+              {/* KPI Summary */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs">
+                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    {isTh ? "สาขาทั้งหมด" : "Total Branches"}
+                  </div>
+                  <div className="text-2xl font-black text-slate-900 mt-1">{branches.length} สาขา</div>
+                  <div className="text-[10px] text-slate-500 mt-1">เครือข่ายร้านค้า</div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs">
+                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    {isTh ? "สาขาที่เปิดทำการ" : "Active Branches"}
+                  </div>
+                  <div className="text-2xl font-black text-emerald-700 mt-1">
+                    {branches.filter((b) => b.isActive).length} สาขา
+                  </div>
+                  <div className="text-[10px] text-emerald-600 font-semibold mt-1">พร้อมคิดเงินหน้าร้าน</div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs">
+                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    {isTh ? "เครื่อง POS รวมทุกสาขา" : "Total POS Terminals"}
+                  </div>
+                  <div className="text-2xl font-black text-blue-700 mt-1">
+                    {branches.reduce((acc, b) => acc + (b.terminalsCount || 1), 0)} เครื่อง
+                  </div>
+                  <div className="text-[10px] text-blue-600 font-medium mt-1">จุดชำระเงิน</div>
+                </div>
+              </div>
+
+              {/* Branch Cards Grid */}
+              {isLoadingBranches ? (
+                <div className="py-12 bg-white rounded-3xl border border-slate-200 flex flex-col items-center justify-center gap-2 text-slate-400">
+                  <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+                  <span className="text-xs font-medium">กำลังโหลดข้อมูลสาขา...</span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {branches.map((branch) => (
+                    <div
+                      key={branch.id}
+                      className="p-5 rounded-3xl bg-white border border-slate-200 shadow-2xs space-y-4 hover:border-emerald-500/50 transition"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shrink-0">
+                            <Building2 className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <div className="text-sm font-black text-slate-900 flex items-center gap-2">
+                              <span>{branch.name}</span>
+                              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                                #{branch.code}
+                              </span>
+                            </div>
+                            <div className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                              <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                              <span className="truncate max-w-[220px]">{branch.address}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <span
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold shrink-0 ${
+                            branch.isActive
+                              ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                              : "bg-red-100 text-red-800 border border-red-300"
+                          }`}
+                        >
+                          {branch.isActive ? (isTh ? "● เปิดทำการ" : "Active") : isTh ? "○ พักทำการ" : "Suspended"}
+                        </span>
+                      </div>
+
+                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2 text-slate-600">
+                          <Monitor className="h-4 w-4 text-emerald-600" />
+                          <span className="font-semibold">
+                            {branch.terminalsCount || 1} {isTh ? "เครื่อง POS ประจำการ" : "Terminals"}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleToggleBranch(branch)}
+                          className={`text-xs font-bold transition px-3 py-1 rounded-xl cursor-pointer ${
+                            branch.isActive
+                              ? "text-red-600 hover:bg-red-50"
+                              : "text-emerald-700 hover:bg-emerald-50 font-black"
+                          }`}
+                        >
+                          {branch.isActive ? (isTh ? "พักทำการชั่วคราว" : "Suspend") : isTh ? "เปิดใช้งาน" : "Activate"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 2: PROMPTPAY SETTINGS */}
           {activeTab === "PROMPTPAY" && (
             <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-2xs space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -456,6 +715,100 @@ export default function SettingsPage() {
           )}
         </main>
       </div>
+
+      {/* MODAL: ADD NEW BRANCH */}
+      {isAddBranchModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-slate-200 max-w-md w-full p-6 shadow-2xl space-y-4 animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-emerald-100 text-emerald-700">
+                  <Building2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-base">
+                    {isTh ? "เพิ่มสาขาร้านค้าใหม่" : "Add New Store Branch"}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {isTh ? "กำหนดชื่อ รหัสสาขา และที่อยู่ตั้งร้าน" : "Set branch name, code and location"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddBranchModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateBranch} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  {isTh ? "ชื่อสาขา * (เช่น สาขาอารีย์, สาขาสยามสแควร์)" : "Branch Name *"}
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="เช่น สาขาอารีย์ ซอย 1"
+                  value={newBranchName}
+                  onChange={(e) => setNewBranchName(e.target.value)}
+                  className="w-full h-10 px-3 rounded-xl border border-slate-300 text-slate-900 focus:outline-none focus:border-emerald-600"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  {isTh ? "รหัสสาขา * (Branch Code เช่น 025 หรือ BKK-02)" : "Branch Code *"}
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="เช่น BKK-02 หรือ 025"
+                  value={newBranchCode}
+                  onChange={(e) => setNewBranchCode(e.target.value)}
+                  className="w-full h-10 px-3 rounded-xl border border-slate-300 font-mono text-slate-900 uppercase font-bold focus:outline-none focus:border-emerald-600"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  {isTh ? "ที่อยู่ / ที่ตั้งสาขา" : "Branch Address"}
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="เช่น เลขที่ 12/3 ถนนพหลโยธิน แขวงสามเสนใน เขตพญาไท กรุงเทพฯ"
+                  value={newBranchAddress}
+                  onChange={(e) => setNewBranchAddress(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 text-slate-900 focus:outline-none focus:border-emerald-600"
+                />
+              </div>
+
+              <div className="pt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddBranchModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition"
+                >
+                  {isTh ? "ยกเลิก" : "Cancel"}
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingBranch}
+                  className="flex-1 py-2.5 rounded-xl bg-[#84cc16] hover:bg-[#65a30d] text-[#061a12] font-black transition flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
+                >
+                  {isSubmittingBranch ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <span>{isTh ? "บันทึกสาขาใหม่" : "Save Branch"}</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
