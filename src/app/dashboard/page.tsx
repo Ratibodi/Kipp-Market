@@ -150,13 +150,13 @@ export default function ManagerDashboardPage() {
                 </div>
               </div>
               <div className="pt-3 border-t border-slate-100 mt-3">
-                <button
-                  type="button"
+                <Link
+                  href="/dashboard/profit"
                   className="text-xs font-bold text-emerald-800 hover:text-emerald-900 flex items-center gap-1 transition"
                 >
                   <span>{t("dash.marginAnalysis")}</span>
                   <ArrowRight className="h-3 w-3" />
-                </button>
+                </Link>
               </div>
             </div>
 

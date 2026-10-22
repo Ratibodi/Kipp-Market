@@ -14,6 +14,7 @@ import {
   RotateCcw,
   AlertTriangle,
   BarChart3,
+  TrendingUp,
   Store,
   LogOut,
   Users,
@@ -159,6 +160,17 @@ export function DashboardSidebar() {
             <div className="px-3 text-[10px] font-bold text-slate-500 tracking-wider uppercase">
               {isTh ? "การเงิน & ค่าใช้จ่าย" : "Finance & Expenses"}
             </div>
+            <Link
+              href="/dashboard/profit"
+              className={`flex items-center gap-2.5 px-3 py-1.5 rounded-xl transition ${
+                pathname.startsWith("/dashboard/profit")
+                  ? "bg-[#bef264] text-[#061a12] font-bold shadow-sm"
+                  : "text-slate-300 hover:text-white hover:bg-[#0c2e20]"
+              }`}
+            >
+              <TrendingUp className="h-4 w-4" />
+              <span>{t("nav.profit")}</span>
+            </Link>
             <Link
               href="/dashboard/expenses"
               className={`flex items-center gap-2.5 px-3 py-1.5 rounded-xl transition ${
