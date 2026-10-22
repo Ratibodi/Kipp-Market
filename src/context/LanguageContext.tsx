@@ -224,6 +224,7 @@ export const translations: Translations = {
     en: "Gross volume comparison across active trading registers (06:00 – 22:00)",
   },
   "dash.todayLegend": { th: "วันนี้ (฿24.8k)", en: "Today (฿24.8k)" },
+  "dash.projectedLegend": { th: "คาดการณ์ช่วงเย็น (เป้า ฿38k)", en: "Evening Forecast (Target ฿38k)" },
   "dash.yesterdayLegend": { th: "เมื่อวาน (฿21.7k)", en: "Yesterday (฿21.7k)" },
   "dash.peakVelocity": { th: "ยอดขายสูงสุดต่อนาที:", en: "Peak Sales Velocity:" },
   "dash.transPerHour": { th: "จำนวนบิลเฉลี่ยต่อชั่วโมง:", en: "Transactions / Hour:" },

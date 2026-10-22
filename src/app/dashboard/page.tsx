@@ -246,10 +246,14 @@ export default function ManagerDashboardPage() {
                     </p>
                   </div>
                   {/* Legend */}
-                  <div className="flex items-center gap-4 text-xs font-semibold">
+                  <div className="flex flex-wrap items-center gap-4 text-xs font-semibold">
                     <div className="flex items-center gap-1.5 text-slate-800">
                       <span className="h-2.5 w-2.5 rounded-full bg-[#061a12]"></span>
                       <span>{t("dash.todayLegend")}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-emerald-700">
+                      <span className="h-2 w-3 rounded-full border border-dashed border-emerald-500 bg-emerald-100"></span>
+                      <span>{t("dash.projectedLegend")}</span>
                     </div>
                     <div className="flex items-center gap-1.5 text-slate-400">
                       <span className="h-2.5 w-2.5 rounded-full bg-slate-300"></span>
@@ -260,7 +264,7 @@ export default function ManagerDashboardPage() {
 
                 {/* SVG Line / Area Graph */}
                 <div className="relative mt-6 h-64 w-full">
-                  <svg className="w-full h-full" viewBox="0 0 600 220" preserveAspectRatio="none">
+                  <svg className="w-full h-full overflow-visible" viewBox="0 0 600 220" preserveAspectRatio="none">
                     {/* Horizontal Grid lines */}
                     <line x1="40" y1="30" x2="580" y2="30" stroke="#f1f5f9" strokeWidth="1" />
                     <line x1="40" y1="80" x2="580" y2="80" stroke="#f1f5f9" strokeWidth="1" />
@@ -273,56 +277,84 @@ export default function ManagerDashboardPage() {
                     <text x="15" y="134" fill="#94a3b8" fontSize="10" fontFamily="monospace">4k</text>
                     <text x="15" y="184" fill="#94a3b8" fontSize="10" fontFamily="monospace">2k</text>
 
-                    {/* Vertical dashed guide for Lunch Peak 12:30 */}
-                    <line x1="285" y1="30" x2="285" y2="190" stroke="#84cc16" strokeDasharray="3 3" strokeWidth="1.5" />
-                    <line x1="335" y1="30" x2="335" y2="190" stroke="#ef4444" strokeDasharray="3 3" strokeWidth="1" />
-
-                    {/* Yesterday line (dashed grey) */}
-                    <path
-                      d="M 50 180 Q 110 170 170 150 T 290 90 T 380 140 T 480 80 T 570 160"
-                      fill="none"
-                      stroke="#cbd5e1"
-                      strokeWidth="2"
-                      strokeDasharray="4 4"
-                    />
-
-                    {/* Today Area gradient fill */}
+                    {/* Gradients */}
                     <defs>
                       <linearGradient id="todayGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#84cc16" stopOpacity="0.3" />
-                        <stop offset="100%" stopColor="#84cc16" stopOpacity="0.0" />
+                        <stop offset="0%" stopColor="#84cc16" stopOpacity="0.30" />
+                        <stop offset="100%" stopColor="#84cc16" stopOpacity="0.02" />
+                      </linearGradient>
+                      <linearGradient id="projectedGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#10b981" stopOpacity="0.12" />
+                        <stop offset="100%" stopColor="#10b981" stopOpacity="0.01" />
                       </linearGradient>
                     </defs>
 
+                    {/* Area fills (Rendered first as background) */}
+                    {/* Today Actual Area gradient fill (06:00 to NOW 14:38) */}
                     <path
-                      d="M 50 185 Q 110 165 170 135 T 285 45 T 335 155 T 440 65 T 570 140 L 570 190 L 50 190 Z"
+                      d="M 50 170 C 90 165, 130 140, 180 120 C 215 105, 238 45, 265 45 C 290 45, 312 115, 330 130 L 330 190 L 50 190 Z"
                       fill="url(#todayGrad)"
                     />
 
-                    {/* Today line (bold dark green) */}
+                    {/* Today Projected Area gradient fill (NOW 14:38 to 22:00) */}
                     <path
-                      d="M 50 185 Q 110 165 170 135 T 285 45 T 335 155 T 440 65 T 570 140"
+                      d="M 330 130 C 348 145, 380 138, 410 100 C 435 70, 445 48, 455 48 C 475 48, 495 85, 520 125 C 540 150, 555 160, 570 165 L 570 190 L 330 190 Z"
+                      fill="url(#projectedGrad)"
+                    />
+
+                    {/* Yesterday line (dashed slate #94a3b8 for clear visibility) */}
+                    <path
+                      d="M 50 175 C 90 170, 130 150, 180 135 C 215 125, 240 75, 265 75 C 295 75, 315 145, 345 145 C 385 145, 420 60, 455 60 C 490 60, 520 135, 545 160 C 555 170, 562 175, 570 175"
+                      fill="none"
+                      stroke="#94a3b8"
+                      strokeWidth="2.2"
+                      strokeDasharray="4 4"
+                    />
+
+                    {/* Vertical dashed guide for Lunch Peak 12:30 */}
+                    <line x1="265" y1="30" x2="265" y2="190" stroke="#84cc16" strokeDasharray="3 3" strokeWidth="1.2" />
+
+                    {/* Vertical dashed guide for Current Time NOW */}
+                    <line x1="330" y1="30" x2="330" y2="190" stroke="#ef4444" strokeDasharray="3 3" strokeWidth="1.2" />
+
+                    {/* Today Actual line (bold dark green #061a12 up to NOW) */}
+                    <path
+                      d="M 50 170 C 90 165, 130 140, 180 120 C 215 105, 238 45, 265 45 C 290 45, 312 115, 330 130"
                       fill="none"
                       stroke="#061a12"
-                      strokeWidth="3"
+                      strokeWidth="3.5"
+                      strokeLinecap="round"
+                    />
+
+                    {/* Today Projected Evening curve (dashed emerald from NOW to 22:00) */}
+                    <path
+                      d="M 330 130 C 348 145, 380 138, 410 100 C 435 70, 445 48, 455 48 C 475 48, 495 85, 520 125 C 540 150, 555 160, 570 165"
+                      fill="none"
+                      stroke="#10b981"
+                      strokeWidth="2.5"
+                      strokeDasharray="5 5"
+                      strokeLinecap="round"
                     />
 
                     {/* Lunch Peak Marker */}
-                    <rect x="250" y="35" width="70" height="18" rx="4" fill="#061a12" />
-                    <text x="285" y="47" textAnchor="middle" fill="#bef264" fontSize="8" fontWeight="bold">
+                    <circle cx="265" cy="45" r="4.5" fill="#84cc16" stroke="#061a12" strokeWidth="2" />
+                    <rect x="225" y="16" width="80" height="18" rx="4" fill="#061a12" stroke="#84cc16" strokeWidth="0.8" />
+                    <text x="265" y="28" textAnchor="middle" fill="#bef264" fontSize="8" fontWeight="bold">
                       LUNCH PEAK 12:30
                     </text>
 
-                    {/* Dinner Peak Marker */}
-                    <rect x="410" y="55" width="60" height="18" rx="4" fill="#061a12" />
-                    <text x="440" y="67" textAnchor="middle" fill="#bef264" fontSize="8" fontWeight="bold">
-                      DINNER 18:00
+                    {/* Dinner Peak Marker (Target / Projected) */}
+                    <circle cx="455" cy="48" r="4" fill="#10b981" stroke="#061a12" strokeWidth="2" />
+                    <rect x="405" y="18" width="100" height="18" rx="4" fill="#061a12" stroke="#10b981" strokeWidth="0.8" />
+                    <text x="455" y="30" textAnchor="middle" fill="#6ee7b7" fontSize="8" fontWeight="bold">
+                      DINNER 18:30 (EST)
                     </text>
 
                     {/* Current Time NOW marker */}
-                    <circle cx="335" cy="155" r="4" fill="#ef4444" />
-                    <rect x="325" y="165" width="22" height="14" rx="3" fill="#ef4444" />
-                    <text x="336" y="175" textAnchor="middle" fill="#ffffff" fontSize="8" fontWeight="bold">
+                    <circle cx="330" cy="130" r="7" fill="#ef4444" opacity="0.3" className="animate-ping" />
+                    <circle cx="330" cy="130" r="4.5" fill="#ef4444" stroke="#ffffff" strokeWidth="1.5" />
+                    <rect x="318" y="142" width="24" height="15" rx="3" fill="#ef4444" />
+                    <text x="330" y="153" textAnchor="middle" fill="#ffffff" fontSize="8" fontWeight="bold">
                       NOW
                     </text>
                   </svg>
