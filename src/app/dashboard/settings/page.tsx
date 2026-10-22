@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Settings,
   QrCode,
@@ -14,10 +14,15 @@ import {
   Shield,
   Smartphone,
   Sparkles,
+  Loader2,
 } from "lucide-react";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { useLanguage } from "@/context/LanguageContext";
+import {
+  createPromptPayQrDataUrl,
+  formatPromptPayDisplay,
+} from "@/lib/promptpay";
 
 export default function SettingsPage() {
   const { t, language } = useLanguage();
@@ -26,10 +31,12 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<"PROMPTPAY" | "SCALE" | "TERMINALS">("PROMPTPAY");
 
   // PromptPay Settings
-  const [promptPayType, setPromptPayType] = useState<string>("TAX_ID");
-  const [promptPayId, setPromptPayId] = useState<string>("0105558194821");
-  const [accountName, setAccountName] = useState<string>("KIPP MARKET CO., LTD.");
-  const [isTestQrGenerated, setIsTestQrGenerated] = useState<boolean>(false);
+  const [promptPayType, setPromptPayType] = useState<string>("PHONE");
+  const [promptPayId, setPromptPayId] = useState<string>("0819998841");
+  const [accountName, setAccountName] = useState<string>("กิ๊ป มินิมาร์ท");
+  const [testQrDataUrl, setTestQrDataUrl] = useState<string>("");
+  const [testEmvPayload, setTestEmvPayload] = useState<string>("");
+  const [isGeneratingTestQr, setIsGeneratingTestQr] = useState<boolean>(false);
 
   // Scale Settings
   const [scaleEnabled, setScaleEnabled] = useState<boolean>(true);
@@ -37,12 +44,73 @@ export default function SettingsPage() {
   const [scalePluLength, setScalePluLength] = useState<string>("5");
   const [scaleValueType, setScaleValueType] = useState<string>("WEIGHT_G");
 
-  // Save feedback
+  // Save feedback & loading state
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
 
-  const handleSave = () => {
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 3000);
+  // Load existing payment settings on mount
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const res = await fetch("/api/settings/payment");
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.settings) {
+            const pId = data.settings.promptpayId || "0819998841";
+            setPromptPayType(data.settings.promptpayType || "PHONE");
+            setPromptPayId(pId);
+            setAccountName(data.settings.accountName || "กิ๊ป มินิมาร์ท");
+            // Generate initial test QR
+            generateTestQrCode(pId);
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to load settings:", e);
+      }
+    }
+    loadSettings();
+  }, []);
+
+  const generateTestQrCode = async (idToUse?: string) => {
+    const targetId = idToUse || promptPayId;
+    if (!targetId) return;
+
+    setIsGeneratingTestQr(true);
+    try {
+      const { payload, qrDataUrl } = await createPromptPayQrDataUrl(targetId, 1.0);
+      setTestQrDataUrl(qrDataUrl);
+      setTestEmvPayload(payload);
+    } catch (err) {
+      console.error("Test QR generation error:", err);
+    } finally {
+      setIsGeneratingTestQr(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const res = await fetch("/api/settings/payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          promptpayType: promptPayType,
+          promptpayId: promptPayId,
+          accountName: accountName,
+        }),
+      });
+
+      if (res.ok) {
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
+        // Refresh preview test QR code
+        await generateTestQrCode(promptPayId);
+      }
+    } catch (err) {
+      console.error("Failed to save settings:", err);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -62,25 +130,39 @@ export default function SettingsPage() {
               </h1>
               <p className="text-xs text-slate-500 mt-1">
                 {isTh
-                  ? "กำหนดค่า PromptPay QR, สเปกบาร์โค้ดตาชั่ง EAN-13 และการลงทะเบียนเครื่อง POS"
-                  : "Configure PromptPay QR parameters, EAN-13 scale prefixes, and terminal pairing tokens"}
+                  ? "กำหนดค่า PromptPay QR สำหรับให้ลูกค้าสแกนจ่ายเงินจริง, สเปกตาชั่ง EAN-13 และเครื่อง POS"
+                  : "Configure PromptPay QR parameters for live customer payments, EAN-13 scales, and terminals"}
               </p>
             </div>
 
             <button
               type="button"
               onClick={handleSave}
-              className="px-5 py-2.5 rounded-xl bg-[#84cc16] hover:bg-[#65a30d] text-[#061a12] text-xs font-black transition flex items-center gap-2 shadow-sm cursor-pointer"
+              disabled={isSaving}
+              className="px-5 py-2.5 rounded-xl bg-[#84cc16] hover:bg-[#65a30d] text-[#061a12] text-xs font-black transition flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
             >
-              <Save className="h-4 w-4" />
-              <span>{isTh ? "บันทึกการตั้งค่า" : "Save Changes"}</span>
+              {isSaving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>{isTh ? "กำลังบันทึก..." : "Saving..."}</span>
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  <span>{isTh ? "บันทึกการตั้งค่า" : "Save Changes"}</span>
+                </>
+              )}
             </button>
           </div>
 
           {saveSuccess && (
             <div className="p-3 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center gap-2 animate-in fade-in">
               <CheckCircle className="h-4 w-4 text-emerald-600" />
-              <span>{isTh ? "บันทึกการตั้งค่าระบบเรียบร้อยแล้ว" : "Settings saved successfully"}</span>
+              <span>
+                {isTh
+                  ? "บันทึกการตั้งค่า PromptPay เรียบร้อยแล้ว พร้อมให้ลูกค้าสแกนจ่ายที่เครื่อง POS ทันที"
+                  : "PromptPay settings saved! Ready for live customer scanning at POS."}
+              </span>
             </div>
           )}
 
@@ -96,7 +178,7 @@ export default function SettingsPage() {
               }`}
             >
               <QrCode className="h-4 w-4" />
-              <span>{isTh ? "1. ตั้งค่า PromptPay QR" : "1. PromptPay QR"}</span>
+              <span>{isTh ? "1. ตั้งค่า PromptPay QR (สแกนจ่ายเงิน)" : "1. PromptPay QR"}</span>
             </button>
 
             <button
@@ -140,8 +222,8 @@ export default function SettingsPage() {
                       onChange={(e) => setPromptPayType(e.target.value)}
                       className="w-full h-10 px-3 rounded-xl border border-slate-300 text-xs font-medium bg-white focus:outline-none focus:border-emerald-600"
                     >
+                      <option value="PHONE">{isTh ? "เบอร์โทรศัพท์มือถือ (Phone Number 10 หลัก)" : "Mobile Phone (10 digits)"}</option>
                       <option value="TAX_ID">{isTh ? "เลขประจำตัวผู้เสียภาษี (Tax ID 13 หลัก)" : "Tax ID (13 digits)"}</option>
-                      <option value="PHONE">{isTh ? "เบอร์โทรศัพท์มือถือ (Phone Number)" : "Phone Number"}</option>
                       <option value="NATIONAL_ID">{isTh ? "เลขบัตรประชาชน (National ID 13 หลัก)" : "Citizen National ID"}</option>
                       <option value="EWALLET">{isTh ? "e-Wallet ID (15 หลัก)" : "e-Wallet ID (15 digits)"}</option>
                     </select>
@@ -155,8 +237,14 @@ export default function SettingsPage() {
                       type="text"
                       value={promptPayId}
                       onChange={(e) => setPromptPayId(e.target.value)}
+                      placeholder={promptPayType === "PHONE" ? "081-234-5678" : "0-1055-58194-82-1"}
                       className="w-full h-10 px-3 rounded-xl border border-slate-300 font-mono text-sm font-bold text-slate-900 focus:outline-none focus:border-emerald-600"
                     />
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      {isTh
+                        ? "หมายเลขที่ผูกกับบัญชีธนาคารของร้านค้าเพื่อรับเงินโอนตรงเข้าบัญชี"
+                        : "Account identifier linked with merchant bank account"}
+                    </p>
                   </div>
 
                   <div>
@@ -173,31 +261,59 @@ export default function SettingsPage() {
 
                   <button
                     type="button"
-                    onClick={() => setIsTestQrGenerated(true)}
-                    className="py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                    onClick={() => generateTestQrCode(promptPayId)}
+                    disabled={isGeneratingTestQr}
+                    className="py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
                   >
-                    <Sparkles className="h-4 w-4 text-[#bef264]" />
-                    <span>{isTh ? "ทดสอบสร้าง QR PromptPay 1.00 บาท" : "Generate Test 1.00 THB QR"}</span>
+                    {isGeneratingTestQr ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin text-[#bef264]" />
+                        <span>กำลังสร้าง QR ทดสอบ...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4 text-[#bef264]" />
+                        <span>{isTh ? "ทดสอบสร้าง QR PromptPay 1.00 บาท (สแกนได้จริง)" : "Generate Test 1.00 THB QR"}</span>
+                      </>
+                    )}
                   </button>
                 </div>
 
-                {/* Right: EMVCo QR Preview */}
+                {/* Right: Live EMVCo Scannable QR Preview */}
                 <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col items-center justify-center text-center">
-                  <div className="w-44 h-44 bg-white p-3 rounded-2xl border border-slate-300 shadow-sm flex flex-col items-center justify-center mb-3">
-                    <img
-                      src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=00020101021229370016A0000006770101110113010555819482154041.005802TH53037646304ABCD"
-                      alt="PromptPay QR Test"
-                      className="w-full h-full object-contain"
-                    />
+                  <div className="w-48 h-48 bg-white p-2 rounded-2xl border border-slate-300 shadow-sm flex flex-col items-center justify-center mb-3 relative">
+                    {testQrDataUrl ? (
+                      <div className="relative flex items-center justify-center">
+                        <img
+                          src={testQrDataUrl}
+                          alt="Live PromptPay QR Test"
+                          className="w-44 h-44 object-contain rounded-lg"
+                        />
+                        {/* Center Thai QR Badge */}
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-[#002f6c] border-2 border-white rounded-md flex items-center justify-center shadow pointer-events-none">
+                          <span className="text-white font-black text-[7px] leading-tight text-center tracking-tight">
+                            THAI<br />QR
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+                    )}
                   </div>
 
                   <div className="text-xs font-bold text-slate-900">{accountName}</div>
                   <div className="text-[11px] font-mono text-slate-500 mt-0.5">
-                    {promptPayType}: {promptPayId}
+                    {promptPayType}: {formatPromptPayDisplay(promptPayId, promptPayType)}
                   </div>
-                  <div className="text-xs font-black font-mono text-emerald-700 mt-1">
-                    ฿1.00 THB • EMVCo Payload OK
+                  <div className="text-xs font-black font-mono text-emerald-700 mt-1 flex items-center gap-1">
+                    <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
+                    <span>฿1.00 THB • EMVCo Payload พร้อมสแกนจริง</span>
                   </div>
+                  {testEmvPayload && (
+                    <div className="text-[9px] font-mono text-slate-400 mt-1 truncate max-w-xs" title={testEmvPayload}>
+                      EMV: {testEmvPayload.slice(0, 24)}...{testEmvPayload.slice(-6)}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

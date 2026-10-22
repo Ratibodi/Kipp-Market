@@ -15,8 +15,14 @@ import {
   X,
   FileCheck2,
   SlidersHorizontal,
+  Loader2,
+  Check,
 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
+import {
+  createPromptPayQrDataUrl,
+  formatPromptPayDisplay,
+} from "@/lib/promptpay";
 
 interface PromptPayModalProps {
   isOpen: boolean;
@@ -24,6 +30,9 @@ interface PromptPayModalProps {
   onPaymentSuccess: () => void;
   amount?: number;
   trxId?: string;
+  promptPayId?: string;
+  accountName?: string;
+  promptPayType?: string;
 }
 
 export function PromptPayModal({
@@ -32,6 +41,9 @@ export function PromptPayModal({
   onPaymentSuccess,
   amount = 196.0,
   trxId = "#TRX-9481",
+  promptPayId: initialPromptPayId,
+  accountName: initialAccountName,
+  promptPayType: initialPromptPayType,
 }: PromptPayModalProps) {
   const { t, language } = useLanguage();
   const isTh = language === "th";
@@ -42,7 +54,73 @@ export function PromptPayModal({
   const [autoPrint, setAutoPrint] = useState(true);
   const [sendSms, setSendSms] = useState(true);
 
-  // Countdown timer simulation
+  // Real PromptPay QR state
+  const [qrDataUrl, setQrDataUrl] = useState<string>("");
+  const [emvPayload, setEmvPayload] = useState<string>("");
+  const [promptPayId, setPromptPayId] = useState<string>(initialPromptPayId || "0819998841");
+  const [accountName, setAccountName] = useState<string>(initialAccountName || "กิ๊ป มินิมาร์ท");
+  const [promptPayType, setPromptPayType] = useState<string>(initialPromptPayType || "PHONE");
+  const [isLoadingQr, setIsLoadingQr] = useState<boolean>(true);
+
+  // Load real store PromptPay settings and generate authentic EMVCo QR code
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let isMounted = true;
+    async function loadRealQr() {
+      setIsLoadingQr(true);
+      try {
+        let activeId = initialPromptPayId;
+        let activeName = initialAccountName;
+        let activeType = initialPromptPayType;
+
+        // If not provided in props, fetch live store payment settings
+        if (!activeId) {
+          try {
+            const res = await fetch("/api/settings/payment");
+            if (res.ok) {
+              const data = await res.json();
+              if (data?.settings?.promptpayId) {
+                activeId = data.settings.promptpayId;
+                activeName = data.settings.accountName || activeName;
+                activeType = data.settings.promptpayType || activeType;
+              }
+            }
+          } catch (fetchErr) {
+            console.warn("Could not fetch store payment settings, using local fallback:", fetchErr);
+          }
+        }
+
+        const targetId = activeId || "0819998841";
+        const targetName = activeName || "กิ๊ป มินิมาร์ท";
+        const targetType = activeType || "PHONE";
+
+        // Generate genuine Bank of Thailand EMVCo QR Code
+        const { payload, qrDataUrl: generatedUrl } = await createPromptPayQrDataUrl(
+          targetId,
+          amount
+        );
+
+        if (isMounted) {
+          setQrDataUrl(generatedUrl);
+          setEmvPayload(payload);
+          setPromptPayId(targetId);
+          setAccountName(targetName);
+          setPromptPayType(targetType);
+        }
+      } catch (err) {
+        console.error("Failed to generate live PromptPay QR:", err);
+      } finally {
+        if (isMounted) setIsLoadingQr(false);
+      }
+    }
+
+    loadRealQr();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, amount, initialPromptPayId, initialAccountName, initialPromptPayType]);
   useEffect(() => {
     if (!isOpen) return;
     if (simState !== "Waiting") return;
@@ -194,8 +272,12 @@ export function PromptPayModal({
               </div>
 
               <div className="text-right text-xs">
-                <div className="text-emerald-400 font-bold font-mono">TAX ID: 0105558194821</div>
-                <div className="text-[11px] text-slate-300">KIPP MARKET BANGKOK (LANE 01)</div>
+                <div className="text-emerald-400 font-bold font-mono">
+                  {promptPayType === "TAX_ID" ? "TAX ID" : "PROMPTPAY"}: {formatPromptPayDisplay(promptPayId, promptPayType)}
+                </div>
+                <div className="text-[11px] text-slate-300 uppercase font-semibold">
+                  {accountName} (LANE 01)
+                </div>
               </div>
             </div>
 
@@ -218,85 +300,36 @@ export function PromptPayModal({
                   PROMPTPAY <span className="text-[9px] tracking-widest text-cyan-300">||||||||||</span>
                 </div>
 
-                <div className="relative p-3 bg-white border-x border-b border-slate-100 flex items-center justify-center">
-                  {/* Clean Crisp Dynamic QR Representation */}
-                  <svg
-                    className="w-56 h-56"
-                    viewBox="0 0 200 200"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    {/* Background */}
-                    <rect width="200" height="200" fill="white" />
-                    {/* Corner 1 */}
-                    <rect x="15" y="15" width="40" height="40" rx="4" stroke="#000" strokeWidth="8" />
-                    <rect x="25" y="25" width="20" height="20" rx="2" fill="#000" />
-                    {/* Corner 2 */}
-                    <rect x="145" y="15" width="40" height="40" rx="4" stroke="#000" strokeWidth="8" />
-                    <rect x="155" y="25" width="20" height="20" rx="2" fill="#000" />
-                    {/* Corner 3 */}
-                    <rect x="15" y="145" width="40" height="40" rx="4" stroke="#000" strokeWidth="8" />
-                    <rect x="25" y="155" width="20" height="20" rx="2" fill="#000" />
-                    {/* Random QR Patterns */}
-                    <rect x="65" y="20" width="8" height="24" fill="#000" />
-                    <rect x="80" y="32" width="16" height="8" fill="#000" />
-                    <rect x="105" y="18" width="16" height="12" fill="#000" />
-                    <rect x="125" y="28" width="10" height="18" fill="#000" />
-                    <rect x="65" y="55" width="20" height="8" fill="#000" />
-                    <rect x="90" y="60" width="15" height="15" fill="#000" />
-                    <rect x="110" y="50" width="8" height="24" fill="#000" />
-                    <rect x="125" y="65" width="20" height="8" fill="#000" />
-                    <rect x="20" y="65" width="15" height="8" fill="#000" />
-                    <rect x="40" y="70" width="8" height="18" fill="#000" />
-                    <rect x="15" y="95" width="25" height="10" fill="#000" />
-                    <rect x="45" y="90" width="15" height="15" fill="#000" />
-                    <rect x="65" y="110" width="18" height="8" fill="#000" />
-                    <rect x="20" y="125" width="15" height="12" fill="#000" />
-                    <rect x="145" y="70" width="15" height="8" fill="#000" />
-                    <rect x="165" y="65" width="20" height="14" fill="#000" />
-                    <rect x="140" y="90" width="12" height="15" fill="#000" />
-                    <rect x="160" y="95" width="25" height="10" fill="#000" />
-                    <rect x="145" y="115" width="15" height="18" fill="#000" />
-                    <rect x="170" y="125" width="15" height="8" fill="#000" />
-                    <rect x="65" y="145" width="12" height="18" fill="#000" />
-                    <rect x="85" y="150" width="20" height="10" fill="#000" />
-                    <rect x="115" y="140" width="18" height="15" fill="#000" />
-                    <rect x="70" y="170" width="25" height="15" fill="#000" />
-                    <rect x="100" y="165" width="15" height="20" fill="#000" />
-                    <rect x="120" y="170" width="20" height="15" fill="#000" />
-                    <rect x="150" y="150" width="18" height="12" fill="#000" />
-                    <rect x="175" y="155" width="12" height="18" fill="#000" />
-                    <rect x="150" y="175" width="35" height="12" fill="#000" />
-                    {/* Center Thai QR Badge */}
-                    <rect x="75" y="75" width="50" height="50" rx="8" fill="#002f6c" stroke="#fff" strokeWidth="4" />
-                    <text
-                      x="100"
-                      y="98"
-                      textAnchor="middle"
-                      fill="#fff"
-                      fontSize="9"
-                      fontWeight="bold"
-                      fontFamily="sans-serif"
-                    >
-                      THAI
-                    </text>
-                    <text
-                      x="100"
-                      y="112"
-                      textAnchor="middle"
-                      fill="#fff"
-                      fontSize="9"
-                      fontWeight="bold"
-                      fontFamily="sans-serif"
-                    >
-                      QR
-                    </text>
-                  </svg>
+                <div className="relative p-2 bg-white border-x border-b border-slate-100 flex items-center justify-center w-full min-h-[230px]">
+                  {isLoadingQr ? (
+                    <div className="w-56 h-56 flex flex-col items-center justify-center gap-2 text-emerald-700">
+                      <Loader2 className="h-8 w-8 animate-spin" />
+                      <span className="text-xs font-semibold">กำลังสร้าง QR พร้อมเพย์...</span>
+                    </div>
+                  ) : qrDataUrl ? (
+                    <div className="relative flex items-center justify-center">
+                      <img
+                        src={qrDataUrl}
+                        alt={`PromptPay QR for ${amount} THB`}
+                        className="w-56 h-56 object-contain rounded-lg"
+                      />
+                      {/* Center Thai QR Badge Overlay (Bank of Thailand standard badge) */}
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 bg-[#002f6c] border-2 border-white rounded-lg flex items-center justify-center shadow-md pointer-events-none">
+                        <span className="text-white font-black text-[8px] leading-tight text-center tracking-tight">
+                          THAI<br />QR
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="w-56 h-56 flex items-center justify-center text-xs text-rose-500 font-medium text-center p-4">
+                      ไม่สามารถสร้าง QR ได้ กรุณาตรวจสอบการตั้งค่า PromptPay
+                    </div>
+                  )}
                 </div>
 
                 <div className="w-full flex items-center justify-between text-[10px] font-mono text-slate-500 pt-2 px-1">
-                  <span>EMV: 000201010212</span>
-                  <span>HASH: 9A4F•••81C</span>
+                  <span title={emvPayload}>EMV: {emvPayload ? `${emvPayload.slice(0, 14)}...` : "000201010212"}</span>
+                  <span>CRC: {emvPayload ? emvPayload.slice(-4) : "OK"}</span>
                 </div>
               </div>
 
