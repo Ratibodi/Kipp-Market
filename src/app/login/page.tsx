@@ -1,19 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
-import { Store, Lock, Mail, ArrowRight, ShieldCheck, KeyRound, Phone } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import {
+  Store,
+  Lock,
+  ArrowRight,
+  KeyRound,
+  Phone,
+  ShieldCheck,
+  CheckCircle2,
+  Loader2,
+} from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { LanguageToggle } from "@/components/common/LanguageToggle";
 
-export default function LoginPage() {
-  const { t, language } = useLanguage();
+function LoginForm() {
+  const { language } = useLanguage();
   const isTh = language === "th";
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
 
   const [loginPhone, setLoginPhone] = useState<string>("081-999-8841");
   const [password, setPassword] = useState<string>("kipp1234");
+  const [rememberMe, setRememberMe] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [loginSuccess, setLoginSuccess] = useState<boolean>(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,23 +38,163 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: loginPhone, password }),
+        body: JSON.stringify({
+          phone: loginPhone,
+          password,
+          rememberMe,
+        }),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        setErrorMessage(data.error || "เบอร์โทรหรือรหัสผ่านไม่ถูกต้อง");
+        setErrorMessage(data.error || (isTh ? "เบอร์โทรหรือรหัสผ่านไม่ถูกต้อง" : "Invalid phone or password"));
       } else {
-        window.location.href = "/dashboard";
+        setLoginSuccess(true);
+        // Navigate after brief visual confirmation
+        setTimeout(() => {
+          window.location.href = callbackUrl;
+        }, 300);
       }
     } catch {
-      // In local dev without DB connection, permit navigation to dashboard
-      window.location.href = "/dashboard";
+      // Local dev offline fallback
+      window.location.href = callbackUrl;
     } finally {
       setIsLoading(false);
     }
   };
 
+  return (
+    <div className="w-full max-w-md bg-[#082217] border border-[#143d2c] rounded-3xl p-8 shadow-2xl space-y-6">
+      <div className="text-center space-y-2">
+        <div className="h-12 w-12 rounded-2xl bg-[#0e3324] border border-emerald-500/30 flex items-center justify-center text-emerald-400 mx-auto mb-3 shadow-lg">
+          <Lock className="h-6 w-6" />
+        </div>
+        <h1 className="text-2xl font-black text-white tracking-tight">
+          {isTh ? "เข้าสู่ระบบร้านค้า" : "Store Backoffice Login"}
+        </h1>
+        <p className="text-xs text-slate-400">
+          {isTh
+            ? "สำหรับเจ้าของร้านและผู้จัดการสาขา (เข้าด้วยเบอร์โทรศัพท์)"
+            : "For Store Owners and General Managers (Mobile Login)"}
+        </p>
+      </div>
+
+      {errorMessage && (
+        <div className="p-3 rounded-xl bg-red-900/40 border border-red-500/50 text-red-200 text-xs text-center font-medium animate-shake">
+          {errorMessage}
+        </div>
+      )}
+
+      {loginSuccess && (
+        <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-500/60 text-emerald-300 text-xs text-center font-bold flex items-center justify-center gap-2">
+          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+          <span>{isTh ? "เข้าสู่ระบบสำเร็จ กำลังพาเข้าสู่ระบบ..." : "Login successful! Redirecting..."}</span>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+        <div>
+          <label className="block font-bold text-slate-300 mb-1.5">
+            {isTh ? "เบอร์โทรศัพท์มือถือที่ลงทะเบียน *" : "Registered Mobile Phone Number *"}
+          </label>
+          <div className="relative">
+            <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-400" />
+            <input
+              type="tel"
+              required
+              disabled={isLoading || loginSuccess}
+              placeholder="081-234-5678"
+              value={loginPhone}
+              onChange={(e) => setLoginPhone(e.target.value)}
+              className="w-full h-11 pl-10 pr-4 rounded-xl bg-[#051710] border border-emerald-700/40 text-slate-200 font-mono focus:outline-none focus:border-emerald-400 disabled:opacity-60"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block font-bold text-slate-300 mb-1.5">
+            {isTh ? "รหัสผ่าน *" : "Password *"}
+          </label>
+          <div className="relative">
+            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <input
+              type="password"
+              required
+              disabled={isLoading || loginSuccess}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full h-11 pl-10 pr-4 rounded-xl bg-[#051710] border border-emerald-700/40 text-slate-200 focus:outline-none focus:border-emerald-400 disabled:opacity-60"
+            />
+          </div>
+        </div>
+
+        {/* Remember Me Option */}
+        <div className="rounded-xl bg-[#051710]/70 border border-emerald-900/40 p-3 space-y-1">
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2.5 cursor-pointer text-slate-200 select-none">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                disabled={isLoading || loginSuccess}
+                className="w-4 h-4 rounded border-emerald-600 bg-[#082217] text-emerald-500 focus:ring-emerald-400 cursor-pointer accent-[#84cc16]"
+              />
+              <span className="font-bold text-xs text-white">
+                {isTh ? "จดจำการเข้าสู่ระบบบนเครื่องนี้" : "Remember login on this device"}
+              </span>
+            </label>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold">
+              {isTh ? "30 วัน" : "30 days"}
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-400 pl-6.5 leading-tight">
+            {isTh
+              ? "เปิดไว้เพื่อให้เจ้าของร้านเข้าหน้าร้านได้ทันทีโดยไม่ต้องใส่รหัสผ่านซ้ำ"
+              : "Allows store owner to enter store immediately without re-entering password"}
+          </p>
+        </div>
+
+        <button
+          type="submit"
+          disabled={isLoading || loginSuccess}
+          className="w-full py-3.5 rounded-2xl bg-[#84cc16] hover:bg-[#65a30d] text-[#061a12] font-black text-sm transition shadow-lg shadow-lime-500/20 flex items-center justify-center gap-2 cursor-pointer mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>{isTh ? "กำลังตรวจสอบข้อมูล..." : "Verifying..."}</span>
+            </>
+          ) : (
+            <>
+              <span>{isTh ? "เข้าสู่ระบบร้านค้า" : "Login to Store"}</span>
+              <ArrowRight className="h-4 w-4" />
+            </>
+          )}
+        </button>
+      </form>
+
+      {/* Alternate POS Cashier Link */}
+      <div className="pt-4 border-t border-[#0f3424] text-center space-y-3">
+        <Link
+          href="/pos"
+          className="inline-flex items-center gap-2 text-xs font-bold text-emerald-300 hover:text-white transition bg-[#0b291d] px-4 py-2 rounded-xl border border-emerald-700/40"
+        >
+          <KeyRound className="h-4 w-4 text-[#bef264]" />
+          <span>{isTh ? "เข้าใช้งานเครื่อง POS หน้าร้านด้วย PIN 4 หลัก →" : "Launch POS with Cashier PIN →"}</span>
+        </Link>
+
+        <div className="text-xs text-slate-400">
+          {isTh ? "ยังไม่มีร้านค้า?" : "Don't have a store yet?"}{" "}
+          <Link href="/register" className="text-emerald-400 font-bold hover:underline">
+            {isTh ? "ลงทะเบียนเปิดร้านค้าฟรี (Beta)" : "Register store for free"}
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function LoginPage() {
   return (
     <div className="min-h-screen bg-[#071912] text-slate-100 font-sans flex flex-col justify-between selection:bg-[#bef264] selection:text-[#061a12]">
       {/* Top Header */}
@@ -57,104 +211,18 @@ export default function LoginPage() {
         <LanguageToggle variant="dark" />
       </header>
 
-      {/* Main Login Box */}
+      {/* Main Login Box with Suspense for useSearchParams */}
       <main className="flex-1 flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-[#082217] border border-[#143d2c] rounded-3xl p-8 shadow-2xl space-y-6">
-          <div className="text-center space-y-2">
-            <div className="h-12 w-12 rounded-2xl bg-[#0e3324] border border-emerald-500/30 flex items-center justify-center text-emerald-400 mx-auto mb-3 shadow-lg">
-              <Lock className="h-6 w-6" />
+        <Suspense
+          fallback={
+            <div className="w-full max-w-md bg-[#082217] border border-[#143d2c] rounded-3xl p-8 text-center text-emerald-400">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
+              <p className="text-xs text-slate-400">Loading Kipp Market...</p>
             </div>
-            <h1 className="text-2xl font-black text-white tracking-tight">
-              {isTh ? "เข้าสู่ระบบหลังร้าน" : "Backoffice Manager Login"}
-            </h1>
-            <p className="text-xs text-slate-400">
-              {isTh
-                ? "สำหรับเจ้าของร้านและผู้จัดการสาขา (เข้าด้วยเบอร์โทรศัพท์)"
-                : "For Store Owners and General Managers (Mobile Login)"}
-            </p>
-          </div>
-
-          {errorMessage && (
-            <div className="p-3 rounded-xl bg-red-900/40 border border-red-500/50 text-red-200 text-xs text-center font-medium">
-              {errorMessage}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-            <div>
-              <label className="block font-bold text-slate-300 mb-1.5">
-                {isTh ? "เบอร์โทรศัพท์มือถือที่ลงทะเบียน *" : "Registered Mobile Phone Number *"}
-              </label>
-              <div className="relative">
-                <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-400" />
-                <input
-                  type="tel"
-                  required
-                  placeholder="081-234-5678"
-                  value={loginPhone}
-                  onChange={(e) => setLoginPhone(e.target.value)}
-                  className="w-full h-11 pl-10 pr-4 rounded-xl bg-[#051710] border border-emerald-700/40 text-slate-200 font-mono focus:outline-none focus:border-emerald-400"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-300 mb-1.5">
-                {isTh ? "รหัสผ่าน *" : "Password *"}
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full h-11 pl-10 pr-4 rounded-xl bg-[#051710] border border-emerald-700/40 text-slate-200 focus:outline-none focus:border-emerald-400"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between text-xs pt-1">
-              <label className="flex items-center gap-2 cursor-pointer text-slate-300">
-                <input
-                  type="checkbox"
-                  defaultChecked
-                  className="rounded border-emerald-700 bg-[#051710] text-emerald-500 focus:ring-0"
-                />
-                <span>{isTh ? "จดจำการเข้าสู่ระบบ" : "Remember session"}</span>
-              </label>
-              <a href="#" className="text-emerald-400 hover:underline">
-                {isTh ? "ลืมรหัสผ่าน?" : "Forgot password?"}
-              </a>
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-3.5 rounded-2xl bg-[#84cc16] hover:bg-[#65a30d] text-[#061a12] font-black text-sm transition shadow-lg shadow-lime-500/20 flex items-center justify-center gap-2 cursor-pointer mt-2"
-            >
-              <span>{isTh ? "เข้าสู่ระบบหลังร้าน" : "Login to Backoffice"}</span>
-              <ArrowRight className="h-4 w-4" />
-            </button>
-          </form>
-
-          {/* Alternate POS Cashier Link */}
-          <div className="pt-4 border-t border-[#0f3424] text-center space-y-3">
-            <Link
-              href="/pos"
-              className="inline-flex items-center gap-2 text-xs font-bold text-emerald-300 hover:text-white transition bg-[#0b291d] px-4 py-2 rounded-xl border border-emerald-700/40"
-            >
-              <KeyRound className="h-4 w-4 text-[#bef264]" />
-              <span>{isTh ? "เข้าใช้งานเครื่อง POS หน้าร้านด้วย PIN 4 หลัก →" : "Launch POS with Cashier PIN →"}</span>
-            </Link>
-
-            <div className="text-xs text-slate-400">
-              {isTh ? "ยังไม่มีร้านค้า?" : "Don't have a store yet?"}{" "}
-              <Link href="/register" className="text-emerald-400 font-bold hover:underline">
-                {isTh ? "ลงทะเบียนเปิดร้านค้าฟรี (Beta)" : "Register store for free"}
-              </Link>
-            </div>
-          </div>
-        </div>
+          }
+        >
+          <LoginForm />
+        </Suspense>
       </main>
 
       {/* Footer */}

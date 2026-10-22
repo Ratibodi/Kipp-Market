@@ -7,6 +7,7 @@ import {
   Bell,
   Monitor,
   ChevronDown,
+  LogOut,
 } from "lucide-react";
 import { LanguageToggle } from "@/components/common/LanguageToggle";
 import { useLanguage } from "@/context/LanguageContext";
@@ -64,8 +65,8 @@ export function DashboardHeader() {
           <span>{t("nav.posTerminal")}</span>
         </Link>
 
-        {/* User Avatar */}
-        <div className="flex items-center gap-2.5 pl-2 border-l border-slate-200">
+        {/* User Avatar & Logout */}
+        <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
           <img
             src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=80&h=80&q=80"
             alt="Somchai P."
@@ -75,6 +76,21 @@ export function DashboardHeader() {
             <div className="font-bold text-slate-900">Somchai P.</div>
             <div className="text-[10px] text-slate-500 font-mono">ID #8841</div>
           </div>
+
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await fetch("/api/auth/logout", { method: "POST" });
+              } finally {
+                window.location.href = "/login";
+              }
+            }}
+            title="ออกจากระบบ (Logout)"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer ml-1"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
         </div>
       </div>
     </header>

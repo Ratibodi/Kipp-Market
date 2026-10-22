@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Store } from "lucide-react";
+import { Store, LogOut } from "lucide-react";
 import { LanguageToggle } from "@/components/common/LanguageToggle";
 import { useLanguage } from "@/context/LanguageContext";
 
@@ -133,6 +133,22 @@ export function PosHeader({
         >
           <span>{t("nav.storeManagement")}</span>
         </Link>
+
+        {/* Exit / Logout Button */}
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              await fetch("/api/auth/logout", { method: "POST" });
+            } finally {
+              window.location.href = "/login";
+            }
+          }}
+          title={isTh ? "ออกจากระบบร้านค้า (Logout)" : "Exit Store / Logout"}
+          className="p-1.5 rounded-lg bg-[#0e3324] hover:bg-rose-950/60 border border-emerald-700/40 hover:border-rose-700/60 text-slate-400 hover:text-rose-300 transition cursor-pointer"
+        >
+          <LogOut className="h-4 w-4" />
+        </button>
       </div>
     </header>
   );

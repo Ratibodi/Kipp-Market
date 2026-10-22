@@ -229,13 +229,20 @@ export function DashboardSidebar() {
           </div>
         </div>
 
-        <Link
-          href="/pos"
-          title={t("nav.logout")}
-          className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-[#0f3424] transition"
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              await fetch("/api/auth/logout", { method: "POST" });
+            } finally {
+              window.location.href = "/login";
+            }
+          }}
+          title={isTh ? "ออกจากระบบ (Logout)" : "Log Out"}
+          className="text-slate-400 hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-950/40 transition cursor-pointer"
         >
           <LogOut className="h-4 w-4" />
-        </Link>
+        </button>
       </div>
     </aside>
   );
