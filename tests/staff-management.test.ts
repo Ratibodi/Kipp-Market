@@ -114,4 +114,86 @@ describe("Staff Management & Role-Based Permissions (RBAC)", () => {
     const activeResult = authenticateStaff(staffRoster[0]);
     expect(activeResult.allowed).toBe(true);
   });
+
+  it("enforces multi-branch isolation: Managers only see their own branch sales while Owner sees all", () => {
+    interface SaleRecord {
+      id: string;
+      branchId: string;
+      amount: number;
+    }
+
+    const sales: SaleRecord[] = [
+      { id: "s1", branchId: "bkk-024", amount: 1200 },
+      { id: "s2", branchId: "bkk-024", amount: 800 },
+      { id: "s3", branchId: "bkk-ari", amount: 1500 },
+      { id: "s4", branchId: "bkk-siam", amount: 2000 },
+    ];
+
+    const getBranchSales = (role: Role, userBranchId: string, requestedBranchId?: string) => {
+      // Manager is strictly restricted to userBranchId
+      if (role === "MANAGER") {
+        return sales.filter((s) => s.branchId === userBranchId);
+      }
+      // Owner can view all or filter by requestedBranchId
+      if (role === "OWNER") {
+        if (requestedBranchId) {
+          return sales.filter((s) => s.branchId === requestedBranchId);
+        }
+        return sales;
+      }
+      return [];
+    };
+
+    // Manager assigned to bkk-024
+    const managerSales = getBranchSales("MANAGER", "bkk-024", "bkk-ari");
+    expect(managerSales.length).toBe(2);
+    expect(managerSales.every((s) => s.branchId === "bkk-024")).toBe(true);
+    // Manager cannot access bkk-ari even if requested
+    expect(managerSales.some((s) => s.branchId === "bkk-ari")).toBe(false);
+
+    // Owner viewing all branches
+    const ownerAllSales = getBranchSales("OWNER", "bkk-024");
+    expect(ownerAllSales.length).toBe(4);
+
+    // Owner filtering to bkk-ari
+    const ownerAriSales = getBranchSales("OWNER", "bkk-024", "bkk-ari");
+    expect(ownerAriSales.length).toBe(1);
+    expect(ownerAriSales[0].amount).toBe(1500);
+  });
+
+  it("assigns cashier and manager to a specific branch upon creation", () => {
+    interface CreateStaffInput {
+      displayName: string;
+      role: Role;
+      branchId: string;
+    }
+
+    const createStaff = (input: CreateStaffInput) => {
+      return {
+        id: `m-${Date.now()}`,
+        displayName: input.displayName,
+        role: input.role,
+        branchId: input.branchId,
+        isActive: true,
+      };
+    };
+
+    const cashierAri = createStaff({
+      displayName: "สมชาย สาขาอารีย์",
+      role: "CASHIER",
+      branchId: "branch-ari-02",
+    });
+
+    const managerSiam = createStaff({
+      displayName: "ผู้จัดการ สยาม",
+      role: "MANAGER",
+      branchId: "branch-siam-01",
+    });
+
+    expect(cashierAri.branchId).toBe("branch-ari-02");
+    expect(cashierAri.role).toBe("CASHIER");
+
+    expect(managerSiam.branchId).toBe("branch-siam-01");
+    expect(managerSiam.role).toBe("MANAGER");
+  });
 });

@@ -13,6 +13,9 @@ let inMemoryStaff = [
     role: "OWNER" as Role,
     isActive: true,
     hasPin: true,
+    branchId: "branch-bkk-024",
+    branchName: "สาขาสุขุมวิท ซอย 24 (สาขาหลัก)",
+    branchCode: "BKK-024",
     createdAt: new Date().toISOString(),
   },
   {
@@ -22,6 +25,9 @@ let inMemoryStaff = [
     role: "MANAGER" as Role,
     isActive: true,
     hasPin: true,
+    branchId: "branch-bkk-024",
+    branchName: "สาขาสุขุมวิท ซอย 24 (สาขาหลัก)",
+    branchCode: "BKK-024",
     createdAt: new Date().toISOString(),
   },
   {
@@ -31,6 +37,9 @@ let inMemoryStaff = [
     role: "CASHIER" as Role,
     isActive: true,
     hasPin: true,
+    branchId: "branch-bkk-024",
+    branchName: "สาขาสุขุมวิท ซอย 24 (สาขาหลัก)",
+    branchCode: "BKK-024",
     createdAt: new Date().toISOString(),
   },
 ];
@@ -70,6 +79,17 @@ export async function GET(req: NextRequest) {
             lockedUntil: true,
             createdAt: true,
             pinHash: true,
+            memberBranches: {
+              include: {
+                branch: {
+                  select: {
+                    id: true,
+                    name: true,
+                    code: true,
+                  },
+                },
+              },
+            },
           },
         }),
         db.tenant.findUnique({
@@ -82,16 +102,22 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({
           success: true,
           storeName: tenant?.name || "Kipp Market (สาขาหลัก)",
-          staff: members.map((m) => ({
-            id: m.id,
-            displayName: m.displayName,
-            phone: m.phone || "-",
-            role: m.role,
-            isActive: m.isActive,
-            isLocked: !!(m.lockedUntil && m.lockedUntil > new Date()),
-            hasPin: !!m.pinHash,
-            createdAt: m.createdAt,
-          })),
+          staff: members.map((m) => {
+            const primaryBranch = m.memberBranches?.[0]?.branch;
+            return {
+              id: m.id,
+              displayName: m.displayName,
+              phone: m.phone || "-",
+              role: m.role,
+              isActive: m.isActive,
+              isLocked: !!(m.lockedUntil && m.lockedUntil > new Date()),
+              hasPin: !!m.pinHash,
+              branchId: primaryBranch?.id || null,
+              branchName: primaryBranch?.name || "สาขาหลัก",
+              branchCode: primaryBranch?.code || "MAIN",
+              createdAt: m.createdAt,
+            };
+          }),
         });
       }
     }
@@ -113,7 +139,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { displayName, phone, role = "CASHIER", pin = "1234" } = body;
+    const { displayName, phone, role = "CASHIER", pin = "1234", branchId } = body;
 
     if (!displayName || !displayName.trim()) {
       return NextResponse.json(
@@ -135,7 +161,13 @@ export async function POST(req: NextRequest) {
     const tenantId = await getTenantId(req);
 
     if (tenantId) {
-      const branch = await db.branch.findFirst({ where: { tenantId } });
+      let branch = null;
+      if (branchId) {
+        branch = await db.branch.findFirst({ where: { id: branchId, tenantId } });
+      }
+      if (!branch) {
+        branch = await db.branch.findFirst({ where: { tenantId } });
+      }
 
       const newMember = await db.member.create({
         data: {
@@ -166,9 +198,12 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: `เพิ่มพนักงาน "${newMember.displayName}" เรียบร้อยแล้ว (PIN: ${cleanPin})`,
+        message: `เพิ่มพนักงาน "${newMember.displayName}" เรียบร้อยแล้ว (สังกัด: ${branch?.name || "สาขาหลัก"}, PIN: ${cleanPin})`,
         staff: {
           ...newMember,
+          branchId: branch?.id || null,
+          branchName: branch?.name || "สาขาหลัก",
+          branchCode: branch?.code || "MAIN",
           hasPin: true,
           isLocked: false,
         },
@@ -183,6 +218,9 @@ export async function POST(req: NextRequest) {
       role: role as Role,
       isActive: true,
       hasPin: true,
+      branchId: branchId || "branch-bkk-024",
+      branchName: "สาขาสุขุมวิท ซอย 24 (สาขาหลัก)",
+      branchCode: "BKK-024",
       createdAt: new Date().toISOString(),
     };
     inMemoryStaff.push(mockCreated);
@@ -204,11 +242,13 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const body = await req.json();
-    const { id, displayName, phone, role, isActive, pin } = body;
+    const { id, displayName, phone, role, isActive, pin, branchId } = body;
 
     if (!id) {
       return NextResponse.json({ error: "ไม่พบรหัสพนักงาน" }, { status: 400 });
     }
+
+    const tenantId = await getTenantId(req);
 
     let updateData: Record<string, unknown> = {};
     if (displayName) updateData.displayName = displayName.trim();
@@ -239,8 +279,26 @@ export async function PUT(req: NextRequest) {
           phone: true,
           role: true,
           isActive: true,
+          tenantId: true,
         },
       });
+
+      if (branchId) {
+        const resolvedTenantId = tenantId || updated.tenantId;
+        const targetBranch = await db.branch.findFirst({
+          where: { id: branchId, tenantId: resolvedTenantId },
+        });
+        if (targetBranch) {
+          await db.memberBranch.deleteMany({ where: { memberId: id } });
+          await db.memberBranch.create({
+            data: {
+              tenantId: resolvedTenantId,
+              memberId: id,
+              branchId: targetBranch.id,
+            },
+          });
+        }
+      }
 
       return NextResponse.json({
         success: true,
@@ -260,6 +318,7 @@ export async function PUT(req: NextRequest) {
           phone: (updateData.phone as string) || inMemoryStaff[staffIdx].phone,
           role: (updateData.role as Role) || inMemoryStaff[staffIdx].role,
           isActive: updateData.isActive !== undefined ? (updateData.isActive as boolean) : inMemoryStaff[staffIdx].isActive,
+          branchId: branchId || inMemoryStaff[staffIdx].branchId,
         };
       }
       return NextResponse.json({

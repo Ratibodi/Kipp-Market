@@ -53,14 +53,31 @@ export default function ProfitAnalyticsPage() {
   const isTh = language === "th";
 
   const [period, setPeriod] = useState<"today" | "7d" | "30d" | "month">("7d");
+  const [branches, setBranches] = useState<Array<{ id: string; name: string; code: string }>>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState<string>("");
   const [data, setData] = useState<ProfitAnalyticsResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [hoveredDayIndex, setHoveredDayIndex] = useState<number | null>(null);
 
   useEffect(() => {
-    setLoading(true);
+    fetch("/api/branches")
+      .then((res) => res.json())
+      .then((json) => {
+        if (json?.branches && Array.isArray(json.branches)) {
+          setBranches(json.branches);
+        }
+      })
+      .catch((err) => console.warn("Failed to load branches:", err));
+  }, []);
 
-    fetch(`/api/dashboard/profit?period=${period}`)
+  useEffect(() => {
+    setLoading(true);
+    const query = new URLSearchParams({ period });
+    if (selectedBranchId) {
+      query.set("branchId", selectedBranchId);
+    }
+
+    fetch(`/api/dashboard/profit?${query.toString()}`)
       .then((res) => res.json())
       .then((json: ProfitAnalyticsResponse) => {
         setData(json);
@@ -70,7 +87,7 @@ export default function ProfitAnalyticsPage() {
         console.error("Failed to load profit data:", err);
         setLoading(false);
       });
-  }, [period]);
+  }, [period, selectedBranchId]);
 
   const handleExportCsv = () => {
     if (!data) return;
@@ -132,14 +149,28 @@ export default function ProfitAnalyticsPage() {
 
             {/* Filter and Period Selection */}
             <div className="flex flex-wrap items-center gap-2.5">
-              <button
-                type="button"
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs transition"
-              >
-                <Store className="h-3.5 w-3.5 text-slate-500" />
-                <span>{isTh ? "สาขา #01 - สุขุมวิท ซอย 24" : "Store #01 - Sukhumvit Soi 24"}</span>
-                <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
-              </button>
+              {data?.branchFilter?.isRestrictedToBranch ? (
+                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-xs font-bold text-blue-900 shadow-2xs">
+                  <Store className="h-3.5 w-3.5 text-blue-600" />
+                  <span>🔒 {isTh ? "เฉพาะสาขา:" : "Branch:"} {data.branchFilter.branchName}</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs shadow-2xs">
+                  <Store className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                  <select
+                    value={selectedBranchId}
+                    onChange={(e) => setSelectedBranchId(e.target.value)}
+                    className="bg-transparent font-bold text-slate-800 text-xs focus:outline-none cursor-pointer"
+                  >
+                    <option value="">{isTh ? "ทุกสาขา (All Branches)" : "All Branches"}</option>
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name} ({b.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Quick Period Buttons */}
               <div className="flex items-center bg-slate-200/70 p-1 rounded-xl text-xs font-bold text-slate-600">

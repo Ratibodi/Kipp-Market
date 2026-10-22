@@ -48,6 +48,12 @@ export interface ProfitAnalyticsResponse {
     marginPercent: number;
     badge: "HIGH_MARGIN" | "VOLUME_DRIVER" | "CORE_STAPLE";
   }>;
+  branchFilter?: {
+    branchId: string | null;
+    branchName: string;
+    branchCode: string;
+    isRestrictedToBranch: boolean;
+  };
 }
 
 export async function GET(request: NextRequest) {
@@ -55,6 +61,33 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const period = searchParams.get("period") || "7d";
     const tenantId = searchParams.get("tenantId") || undefined;
+
+    const userRole = request.headers.get("x-member-role");
+    const userBranchId = request.headers.get("x-branch-id");
+    let branchId = searchParams.get("branchId") || undefined;
+
+    // Strict Role-Based Isolation: Managers can ONLY view their assigned branch!
+    const isManager = userRole === "MANAGER";
+    if (isManager && userBranchId) {
+      branchId = userBranchId;
+    }
+
+    let branchInfo: { id: string; name: string; code: string } | null = null;
+    if (branchId) {
+      try {
+        branchInfo = await db.branch.findUnique({
+          where: { id: branchId },
+          select: { id: true, name: true, code: true },
+        });
+      } catch {}
+    }
+
+    const branchFilterObj = {
+      branchId: branchId || null,
+      branchName: branchInfo?.name || (branchId ? "สาขาที่เลือก" : "ทุกสาขา (All Branches)"),
+      branchCode: branchInfo?.code || (branchId ? "" : "ALL"),
+      isRestrictedToBranch: isManager,
+    };
 
     const now = new Date();
     let startDate = new Date();
@@ -81,6 +114,7 @@ export async function GET(request: NextRequest) {
       liveSales = await db.sale.findMany({
         where: {
           ...(tenantId ? { tenantId } : {}),
+          ...(branchId ? { branchId } : {}),
           status: "COMPLETED",
           soldAt: { gte: startDate, lte: now },
         },
@@ -99,6 +133,7 @@ export async function GET(request: NextRequest) {
       liveExpenses = await db.expense.findMany({
         where: {
           ...(tenantId ? { tenantId } : {}),
+          ...(branchId ? { branchId } : {}),
           spentAt: { gte: startDate, lte: now },
         },
       });
@@ -264,11 +299,12 @@ export async function GET(request: NextRequest) {
         dailyTrend,
         categoryBreakdown,
         topProfitDrivers,
+        branchFilter: branchFilterObj,
       });
     }
 
     // Fallback: Rich realistic mock data according to Thai retail benchmarks
-    const fallbackResponse = getFallbackData(period, startDate, now);
+    const fallbackResponse = getFallbackData(period, startDate, now, branchFilterObj);
     return NextResponse.json(fallbackResponse);
   } catch (error: any) {
     console.error("Error generating profit analytics:", error);
@@ -279,7 +315,12 @@ export async function GET(request: NextRequest) {
   }
 }
 
-function getFallbackData(period: string, startDate: Date, endDate: Date): ProfitAnalyticsResponse {
+function getFallbackData(
+  period: string,
+  startDate: Date,
+  endDate: Date,
+  branchFilter?: ProfitAnalyticsResponse["branchFilter"]
+): ProfitAnalyticsResponse {
   let numDays = 7;
   if (period === "today") {
     numDays = 1;
@@ -532,5 +573,6 @@ function getFallbackData(period: string, startDate: Date, endDate: Date): Profit
     dailyTrend,
     categoryBreakdown,
     topProfitDrivers,
+    branchFilter,
   };
 }

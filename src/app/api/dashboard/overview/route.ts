@@ -47,6 +47,15 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const tenantId = searchParams.get("tenantId") || undefined;
 
+    const userRole = request.headers.get("x-member-role");
+    const userBranchId = request.headers.get("x-branch-id");
+    let branchId = searchParams.get("branchId") || undefined;
+
+    const isManager = userRole === "MANAGER";
+    if (isManager && userBranchId) {
+      branchId = userBranchId;
+    }
+
     const now = new Date();
     const currentHourDecimal = now.getHours() + now.getMinutes() / 60;
 
@@ -65,6 +74,7 @@ export async function GET(request: NextRequest) {
       todaySales = await db.sale.findMany({
         where: {
           ...(tenantId ? { tenantId } : {}),
+          ...(branchId ? { branchId } : {}),
           status: "COMPLETED",
           soldAt: { gte: startOfToday, lte: endOfToday },
         },
@@ -83,6 +93,7 @@ export async function GET(request: NextRequest) {
       yesterdaySales = await db.sale.findMany({
         where: {
           ...(tenantId ? { tenantId } : {}),
+          ...(branchId ? { branchId } : {}),
           status: "COMPLETED",
           soldAt: { gte: startOfYesterday, lte: endOfYesterday },
         },

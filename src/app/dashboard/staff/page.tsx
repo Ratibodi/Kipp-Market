@@ -32,6 +32,16 @@ interface StaffItem {
   isActive: boolean;
   hasPin: boolean;
   isLocked?: boolean;
+  branchId?: string | null;
+  branchName?: string;
+  branchCode?: string;
+}
+
+interface BranchOption {
+  id: string;
+  name: string;
+  code: string;
+  address?: string;
 }
 
 export default function StaffManagementPage() {
@@ -39,6 +49,7 @@ export default function StaffManagementPage() {
   const isTh = language === "th";
 
   const [staffList, setStaffList] = useState<StaffItem[]>([]);
+  const [branches, setBranches] = useState<BranchOption[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [errorToast, setErrorToast] = useState<string | null>(null);
@@ -48,6 +59,7 @@ export default function StaffManagementPage() {
   const [newName, setNewName] = useState<string>("");
   const [newPhone, setNewPhone] = useState<string>("");
   const [newRole, setNewRole] = useState<"CASHIER" | "MANAGER">("CASHIER");
+  const [selectedBranchId, setSelectedBranchId] = useState<string>("");
   const [newPin, setNewPin] = useState<string>("1234");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
@@ -55,6 +67,11 @@ export default function StaffManagementPage() {
   const [isResetPinModalOpen, setIsResetPinModalOpen] = useState<boolean>(false);
   const [selectedStaffForPin, setSelectedStaffForPin] = useState<StaffItem | null>(null);
   const [resetPinValue, setResetPinValue] = useState<string>("");
+
+  // Branch Transfer Modal State
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState<boolean>(false);
+  const [selectedStaffForTransfer, setSelectedStaffForTransfer] = useState<StaffItem | null>(null);
+  const [targetBranchId, setTargetBranchId] = useState<string>("");
 
   const loadStaff = async () => {
     setIsLoading(true);
@@ -73,8 +90,26 @@ export default function StaffManagementPage() {
     }
   };
 
+  const loadBranches = async () => {
+    try {
+      const res = await fetch("/api/branches");
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.branches && Array.isArray(data.branches)) {
+          setBranches(data.branches);
+          if (data.branches.length > 0 && !selectedBranchId) {
+            setSelectedBranchId(data.branches[0].id);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to fetch branches:", err);
+    }
+  };
+
   useEffect(() => {
     loadStaff();
+    loadBranches();
   }, []);
 
   const handleCreateStaff = async (e: React.FormEvent) => {
@@ -91,6 +126,7 @@ export default function StaffManagementPage() {
           phone: newPhone,
           role: newRole,
           pin: newPin,
+          branchId: selectedBranchId || (branches[0]?.id || undefined),
         }),
       });
 
@@ -107,6 +143,41 @@ export default function StaffManagementPage() {
       }
     } catch {
       setErrorToast("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
+    } finally {
+      setIsSubmitting(false);
+      setTimeout(() => setSuccessToast(null), 4000);
+    }
+  };
+
+  const handleTransferBranch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStaffForTransfer || !targetBranchId) return;
+
+    setIsSubmitting(true);
+    setErrorToast(null);
+
+    try {
+      const res = await fetch("/api/staff", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: selectedStaffForTransfer.id,
+          branchId: targetBranchId,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setErrorToast(data.error || "เกิดข้อผิดพลาดในการย้ายสาขา");
+      } else {
+        const targetBranchName =
+          branches.find((b) => b.id === targetBranchId)?.name || "สาขาที่เลือก";
+        setSuccessToast(`ย้าย "${selectedStaffForTransfer.displayName}" ไปยัง ${targetBranchName} เรียบร้อยแล้ว`);
+        setIsTransferModalOpen(false);
+        loadStaff();
+      }
+    } catch {
+      setErrorToast("ไม่สามารถย้ายสาขาได้");
     } finally {
       setIsSubmitting(false);
       setTimeout(() => setSuccessToast(null), 4000);
@@ -291,6 +362,7 @@ export default function StaffManagementPage() {
                   <thead className="bg-slate-50 text-[11px] font-bold uppercase text-slate-500 border-b border-slate-200">
                     <tr>
                       <th className="py-3.5 px-5">ชื่อ-นามสกุล</th>
+                      <th className="py-3.5 px-4">สาขาประจำ (Branch)</th>
                       <th className="py-3.5 px-4">เบอร์โทรศัพท์</th>
                       <th className="py-3.5 px-4">บทบาทหน้าที่ (Role)</th>
                       <th className="py-3.5 px-4 text-center">รหัส PIN หน้าร้าน POS</th>
@@ -323,6 +395,16 @@ export default function StaffManagementPage() {
                                 <div className="text-[10px] text-amber-600 font-normal">
                                   เจ้าของบัญชีหลัก
                                 </div>
+                              )}
+                            </div>
+                          </td>
+
+                          <td className="py-3.5 px-4">
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 text-xs font-semibold border border-slate-200">
+                              <Store className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                              <span className="truncate max-w-[140px]">{staff.branchName || "สาขาหลัก"}</span>
+                              {staff.branchCode && (
+                                <span className="text-[10px] text-slate-400 font-mono">({staff.branchCode})</span>
                               )}
                             </div>
                           </td>
@@ -368,6 +450,20 @@ export default function StaffManagementPage() {
                           </td>
 
                           <td className="py-3.5 px-5 text-right space-x-2">
+                            {!isOwner && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedStaffForTransfer(staff);
+                                  setTargetBranchId(staff.branchId || (branches[0]?.id || ""));
+                                  setIsTransferModalOpen(true);
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] transition cursor-pointer"
+                              >
+                                {isTh ? "ย้ายสาขา" : "Transfer"}
+                              </button>
+                            )}
+
                             <button
                               type="button"
                               onClick={() => {
@@ -546,8 +642,30 @@ export default function StaffManagementPage() {
                   className="w-full h-10 px-3 rounded-xl border border-slate-300 text-slate-900 bg-white font-medium focus:outline-none focus:border-emerald-600"
                 >
                   <option value="CASHIER">แคชเชียร์ (คิดเงินหน้าร้าน POS, เปิด-ปิดกะ)</option>
-                  <option value="MANAGER">ผู้จัดการสาขา (มีสิทธิ์อนุมัติ Void และส่วนลดพิเศษ)</option>
+                  <option value="MANAGER">ผู้จัดการสาขา (มีสิทธิ์อนุมัติ Void และดูข้อมูลสาขา)</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">สาขาที่สังกัด (Branch Assignment) *</label>
+                <select
+                  value={selectedBranchId}
+                  onChange={(e) => setSelectedBranchId(e.target.value)}
+                  className="w-full h-10 px-3 rounded-xl border border-slate-300 text-slate-900 bg-white font-medium focus:outline-none focus:border-emerald-600"
+                >
+                  {branches.length === 0 ? (
+                    <option value="">สาขาหลัก (Default Branch)</option>
+                  ) : (
+                    branches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        📍 {b.name} ({b.code})
+                      </option>
+                    ))
+                  )}
+                </select>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  กำหนดว่าพนักงานคนนี้จะปฏิบัติงานและบันทึกยอดขายผูกกับสาขาใด
+                </p>
               </div>
 
               <div>
@@ -646,6 +764,71 @@ export default function StaffManagementPage() {
                   className="flex-1 py-2.5 rounded-xl bg-[#84cc16] hover:bg-[#65a30d] text-[#061a12] font-black transition flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
                 >
                   {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <span>เปลี่ยนรหัส</span>}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: TRANSFER BRANCH */}
+      {isTransferModalOpen && selectedStaffForTransfer && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-slate-200 max-w-sm w-full p-6 shadow-2xl space-y-4 animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-blue-100 text-blue-700">
+                  <Store className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-base">ย้ายสาขาประจำ</h3>
+                  <p className="text-xs text-slate-400">{selectedStaffForTransfer.displayName}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsTransferModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleTransferBranch} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  เลือกสาขาใหม่ที่ต้องการให้ไปประจำการ *
+                </label>
+                <select
+                  value={targetBranchId}
+                  onChange={(e) => setTargetBranchId(e.target.value)}
+                  className="w-full h-11 px-3 rounded-xl border border-slate-300 text-slate-900 bg-white font-medium focus:outline-none focus:border-emerald-600"
+                >
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      📍 {b.name} ({b.code})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-slate-400 mt-1.5">
+                  เมื่อย้ายแล้ว ยอดขายและกะทำงานจะเชื่อมโยงกับสาขาใหม่ทันที
+                </p>
+              </div>
+
+              <div className="pt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsTransferModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting || !targetBranchId}
+                  className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black transition flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
+                >
+                  {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <span>บันทึกการย้าย</span>}
                 </button>
               </div>
             </form>
