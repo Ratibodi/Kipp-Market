@@ -56,25 +56,32 @@ export async function GET(req: NextRequest) {
     const tenantId = await getTenantId(req);
 
     if (tenantId) {
-      const members = await db.member.findMany({
-        where: { tenantId },
-        orderBy: [{ role: "asc" }, { createdAt: "asc" }],
-        select: {
-          id: true,
-          displayName: true,
-          phone: true,
-          role: true,
-          isActive: true,
-          failedPinCount: true,
-          lockedUntil: true,
-          createdAt: true,
-          pinHash: true,
-        },
-      });
+      const [members, tenant] = await Promise.all([
+        db.member.findMany({
+          where: { tenantId },
+          orderBy: [{ role: "asc" }, { createdAt: "asc" }],
+          select: {
+            id: true,
+            displayName: true,
+            phone: true,
+            role: true,
+            isActive: true,
+            failedPinCount: true,
+            lockedUntil: true,
+            createdAt: true,
+            pinHash: true,
+          },
+        }),
+        db.tenant.findUnique({
+          where: { id: tenantId },
+          select: { name: true, slug: true },
+        }),
+      ]);
 
       if (members.length > 0) {
         return NextResponse.json({
           success: true,
+          storeName: tenant?.name || "Kipp Market (สาขาหลัก)",
           staff: members.map((m) => ({
             id: m.id,
             displayName: m.displayName,
@@ -91,6 +98,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      storeName: "Kipp Market Demo",
       staff: inMemoryStaff,
     });
   } catch (error: unknown) {

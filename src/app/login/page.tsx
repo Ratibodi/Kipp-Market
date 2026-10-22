@@ -44,6 +44,7 @@ function LoginForm() {
   const [rememberMe, setRememberMe] = useState<boolean>(true);
 
   // Tab 2: Cashier PIN State
+  const [currentStoreName, setCurrentStoreName] = useState<string>("Kipp Market");
   const [staffList, setStaffList] = useState<StaffOption[]>([]);
   const [selectedStaff, setSelectedStaff] = useState<StaffOption | null>(null);
   const [pin, setPin] = useState<string>("");
@@ -63,6 +64,9 @@ function LoginForm() {
         const res = await fetch("/api/staff");
         if (res.ok) {
           const data = await res.json();
+          if (data?.storeName) {
+            setCurrentStoreName(data.storeName);
+          }
           if (data?.staff && Array.isArray(data.staff)) {
             const activeOnly = data.staff.filter((s: StaffOption) => s.isActive);
             setStaffList(activeOnly);
@@ -330,6 +334,27 @@ function LoginForm() {
             <p className="text-xs text-slate-400">
               {isTh ? "แตะเลือกชื่อพนักงาน แล้วกด PIN 4 หลักประจำตัว" : "Select your name and enter your 4-digit PIN"}
             </p>
+          </div>
+
+          {/* Store Identification Badge */}
+          <div className="p-2.5 bg-[#051710] rounded-2xl border border-emerald-900/50 flex items-center justify-between">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                <Store className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[10px] text-slate-400 font-medium leading-none mb-1">
+                  {isTh ? "เครื่องประจำร้านค้า:" : "Connected Store:"}
+                </div>
+                <div className="text-xs font-bold text-white flex items-center gap-1.5 truncate">
+                  <span className="truncate">{currentStoreName}</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 animate-pulse" />
+                </div>
+              </div>
+            </div>
+            <div className="text-[10px] text-emerald-400 font-mono bg-emerald-950/80 px-2 py-0.5 rounded-md border border-emerald-800/40 shrink-0">
+              POS Terminal
+            </div>
           </div>
 
           {/* Staff Selector Chips */}
