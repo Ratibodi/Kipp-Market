@@ -33,8 +33,16 @@ export async function POST(req: NextRequest) {
       // In dev/offline mode, permit mock staff login with PIN 1234 or 9999
     }
 
+    // Check if member is explicitly suspended/inactive
+    if (member && !member.isActive) {
+      return NextResponse.json(
+        { error: "พนักงานท่านนี้ถูกระงับสิทธิ์การใช้งานในระบบแล้ว ไม่สามารถเข้าสู่ระบบได้" },
+        { status: 403 }
+      );
+    }
+
     // Fallback for mock staff in dev or offline
-    if (!member || !member.isActive || !member.pinHash) {
+    if (!member || !member.pinHash) {
       if (pin === "1234" || pin === "5678" || pin === "9999") {
         const mockStaffName =
           memberId === "staff-2"

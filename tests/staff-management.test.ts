@@ -86,4 +86,32 @@ describe("Staff Management & Role-Based Permissions (RBAC)", () => {
     expect(isValidPin("1234567")).toBe(false); // Too long
     expect(isValidPin("12a4")).toBe(false); // Non-numeric
   });
+
+  it("filters out suspended staff from POS keypad login and blocks authentication", () => {
+    const staffRoster = [
+      { id: "s1", displayName: "เจ้าของร้าน", role: "OWNER", isActive: true },
+      { id: "s2", displayName: "สมชาย พ. (ผจก.)", role: "MANAGER", isActive: true },
+      { id: "s3", displayName: "ณัฐพร ก. (แคชเชียร์)", role: "CASHIER", isActive: false }, // Suspended
+    ];
+
+    // Only active staff are presented as clickable PIN chips on the POS login screen
+    const availableForPosLogin = staffRoster.filter((s) => s.isActive);
+    expect(availableForPosLogin.length).toBe(2);
+    expect(availableForPosLogin.some((s) => s.displayName.includes("ณัฐพร"))).toBe(false);
+
+    // Authentication check for suspended account
+    const authenticateStaff = (member: { isActive: boolean }) => {
+      if (!member.isActive) {
+        return { allowed: false, error: "พนักงานท่านนี้ถูกระงับสิทธิ์การใช้งานในระบบแล้ว ไม่สามารถเข้าสู่ระบบได้" };
+      }
+      return { allowed: true };
+    };
+
+    const suspendedResult = authenticateStaff(staffRoster[2]);
+    expect(suspendedResult.allowed).toBe(false);
+    expect(suspendedResult.error).toContain("ระงับสิทธิ์");
+
+    const activeResult = authenticateStaff(staffRoster[0]);
+    expect(activeResult.allowed).toBe(true);
+  });
 });

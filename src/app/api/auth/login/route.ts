@@ -23,7 +23,6 @@ export async function POST(req: NextRequest) {
       member = await db.member.findFirst({
         where: {
           phone: cleanPhone,
-          isActive: true,
         },
         include: {
           tenant: true,
@@ -38,6 +37,13 @@ export async function POST(req: NextRequest) {
           },
         },
       });
+
+      if (member && !member.isActive) {
+        return NextResponse.json(
+          { error: "บัญชีนี้ถูกระงับสิทธิ์การใช้งานชั่วคราว กรุณาติดต่อผู้ดูแลระบบร้านค้า" },
+          { status: 403 }
+        );
+      }
     } catch (dbErr) {
       console.warn("DB find member exception, checking demo credentials:", dbErr);
     }
