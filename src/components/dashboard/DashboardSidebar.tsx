@@ -180,7 +180,7 @@ export function DashboardSidebar() {
               }`}
             >
               <Receipt className="h-4 w-4" />
-              <span>{isTh ? "บันทึกค่าใช้จ่ายร้าน" : "Store Expenses"}</span>
+              <span>{isTh ? "ค่าใช้จ่าย & เงินรับเข้า" : "Expenses & Inflows"}</span>
             </Link>
           </div>
 
