@@ -81,7 +81,23 @@ export async function middleware(req: NextRequest) {
     return response;
   }
 
-  // 6. User is authenticated, forward request with session metadata in headers
+  // 6. Role-Based Access Control (RBAC)
+  // CASHIER: Restricted to POS terminal only (/pos). Redirect back to /pos if attempting to enter /dashboard.
+  if (session.role === "CASHIER" && pathname.startsWith("/dashboard")) {
+    const posUrl = new URL("/pos", req.url);
+    return NextResponse.redirect(posUrl);
+  }
+
+  // MANAGER: Backoffice operations permitted (/dashboard, /transactions, /inventory, /expenses).
+  // Strictly restricted from Staff Credentials (/dashboard/staff) and Store Payment Settings (/dashboard/settings).
+  if (session.role === "MANAGER") {
+    if (pathname.startsWith("/dashboard/settings") || pathname.startsWith("/dashboard/staff")) {
+      const dashboardUrl = new URL("/dashboard", req.url);
+      return NextResponse.redirect(dashboardUrl);
+    }
+  }
+
+  // 7. Forward request with session metadata in headers
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set("x-member-id", session.memberId);
   requestHeaders.set("x-tenant-id", session.tenantId);
