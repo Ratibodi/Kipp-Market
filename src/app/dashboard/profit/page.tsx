@@ -36,25 +36,18 @@ export default function ProfitAnalyticsPage() {
   const [hoveredDayIndex, setHoveredDayIndex] = useState<number | null>(null);
 
   useEffect(() => {
-    let isMounted = true;
     setLoading(true);
 
     fetch(`/api/dashboard/profit?period=${period}`)
       .then((res) => res.json())
       .then((json: ProfitAnalyticsResponse) => {
-        if (isMounted) {
-          setData(json);
-          setLoading(false);
-        }
+        setData(json);
+        setLoading(false);
       })
       .catch((err) => {
         console.error("Failed to load profit data:", err);
-        if (isMounted) setLoading(false);
+        setLoading(false);
       });
-
-    return () => {
-      isMounted = false;
-    };
   }, [period]);
 
   const handleExportCsv = () => {
