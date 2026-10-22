@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   Package,
   Plus,
@@ -31,6 +31,9 @@ export default function ProductsPage() {
   const { t, language } = useLanguage();
   const isTh = language === "th";
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importNotification, setImportNotification] = useState<string | null>(null);
+
   const [products, setProducts] = useState<CatalogProduct[]>(MOCK_CATALOG_PRODUCTS);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
@@ -58,6 +61,109 @@ export default function ProductsPage() {
     if (cat === "Meat & Fresh") return isTh ? "ของสด & ผักผลไม้ (Fresh)" : "Meat & Fresh";
     if (cat === "Bakery") return isTh ? "เบเกอรี่ (Bakery)" : "Bakery";
     return cat;
+  };
+
+  const parseCSVLine = (text: string) => {
+    const result: string[] = [];
+    let cur = "";
+    let inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === "," && !inQuotes) {
+        result.push(cur.trim().replace(/^"|"$/g, ""));
+        cur = "";
+      } else {
+        cur += char;
+      }
+    }
+    result.push(cur.trim().replace(/^"|"$/g, ""));
+    return result;
+  };
+
+  const handleProcessCsvFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target?.result as string;
+      if (!content) return;
+
+      const lines = content.replace(/\r/g, "").split("\n").filter((l) => l.trim().length > 0);
+      if (lines.length < 2) {
+        alert(isTh ? "ไฟล์ไม่มีข้อมูลสินค้า" : "File has no product data");
+        return;
+      }
+
+      const rawHeaders = parseCSVLine(lines[0]).map((h) => h.toLowerCase().replace(/[\s\(\)_-]/g, ""));
+      const findCol = (keywords: string[]) => {
+        return rawHeaders.findIndex((h) => keywords.some((k) => h.includes(k.toLowerCase())));
+      };
+
+      const barcodeCol = findCol(["barcode", "บาร์โค้ด", "บาร์"]);
+      const nameThCol = findCol(["nameth", "ชื่อสินค้าไทย", "ชื่อสินค้า", "ชื่อ"]);
+      const nameEnCol = findCol(["nameen", "ชื่อสินค้าอังกฤษ", "name"]);
+      const catCol = findCol(["category", "หมวดหมู่", "หมวด"]);
+      const saleTypeCol = findCol(["saletype", "ประเภทการขาย", "ประเภท", "type"]);
+      const unitCol = findCol(["unit", "หน่วย", "หน่วยนับ"]);
+      const priceCol = findCol(["price", "ราคาขาย", "ราคา"]);
+      const costCol = findCol(["cost", "avgcost", "ต้นทุน", "ราคาต้นทุน"]);
+      const stockCol = findCol(["stock", "stockqty", "คงเหลือ", "จำนวนคงเหลือ", "สต็อก"]);
+
+      const newProducts: CatalogProduct[] = [];
+      const newCats: string[] = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const cols = parseCSVLine(lines[i]);
+        if (cols.length === 0 || !cols.some((c) => c.length > 0)) continue;
+
+        const barcode = (barcodeCol !== -1 ? cols[barcodeCol] : cols[0]) || `8850${Math.floor(100000000 + Math.random() * 900000000)}`;
+        const nameTh = (nameThCol !== -1 ? cols[nameThCol] : cols[1]) || `สินค้า ${i}`;
+        const nameEn = (nameEnCol !== -1 ? cols[nameEnCol] : nameTh) || nameTh;
+        const cat = (catCol !== -1 ? cols[catCol] : "General") || "General";
+        const saleTypeRaw = (saleTypeCol !== -1 ? cols[saleTypeCol] : "").toLowerCase();
+        const saleType: "UNIT" | "WEIGHT" = saleTypeRaw.includes("weight") || saleTypeRaw.includes("ชั่ง") ? "WEIGHT" : "UNIT";
+        const unit = (unitCol !== -1 ? cols[unitCol] : "ชิ้น") || "ชิ้น";
+        const price = parseFloat(priceCol !== -1 ? cols[priceCol] : "0") || 0;
+        const avgCost = parseFloat(costCol !== -1 ? cols[costCol] : "0") || 0;
+        const stockQty = parseFloat(stockCol !== -1 ? cols[stockCol] : "0") || 0;
+
+        if (cat && !categoriesList.includes(cat) && !newCats.includes(cat)) {
+          newCats.push(cat);
+        }
+
+        newProducts.push({
+          id: `prod-${Date.now()}-${i}`,
+          sku: `SKU-${barcode || Math.floor(100000 + Math.random() * 900000)}`,
+          barcode,
+          nameTh,
+          nameEn,
+          category: cat,
+          saleType,
+          unit,
+          price,
+          avgCost,
+          stockQty,
+          isQuickKey: false,
+          imageUrl: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=160&h=160&q=80",
+          status: stockQty <= 0 ? "OUT_OF_STOCK" : stockQty <= 10 ? "LOW_STOCK" : "ACTIVE",
+        });
+      }
+
+      if (newProducts.length > 0) {
+        if (newCats.length > 0) {
+          setCategoriesList((prev) => [...prev, ...newCats]);
+        }
+        setProducts((prev) => [...newProducts, ...prev]);
+        setImportNotification(
+          isTh
+            ? `นำเข้าสินค้าสำเร็จ ${newProducts.length} รายการ (พบหมวดหมู่ใหม่ ${newCats.length} หมวด)`
+            : `Successfully imported ${newProducts.length} products (${newCats.length} new categories)`
+        );
+        setTimeout(() => setImportNotification(null), 5000);
+      }
+      setIsCsvModalOpen(false);
+    };
+    reader.readAsText(file, "UTF-8");
   };
 
   const allCategories = Array.from(
@@ -249,6 +355,23 @@ export default function ProductsPage() {
               </button>
             </div>
           </div>
+
+          {/* Import Notification Banner */}
+          {importNotification && (
+            <div className="bg-emerald-50 border border-emerald-300 text-emerald-900 rounded-2xl p-4 flex items-center justify-between shadow-xs animate-in fade-in">
+              <div className="flex items-center gap-2.5">
+                <CheckCircle className="h-5 w-5 text-emerald-600 shrink-0" />
+                <span className="text-xs font-bold">{importNotification}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setImportNotification(null)}
+                className="text-emerald-700 hover:text-emerald-900 text-xs font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           {/* Metric Summary Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -760,13 +883,33 @@ export default function ProductsPage() {
               </button>
             </div>
 
-            <div className="p-6 border-2 border-dashed border-slate-300 rounded-2xl text-center space-y-2 bg-slate-50">
-              <Upload className="h-8 w-8 text-slate-400 mx-auto" />
-              <div className="text-xs font-bold text-slate-800">
-                {isTh ? "ลากไฟล์ CSV หรือ Excel วางที่นี่" : "Drag & Drop CSV file here"}
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept=".csv"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleProcessCsvFile(file);
+              }}
+            />
+
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                const file = e.dataTransfer.files?.[0];
+                if (file) handleProcessCsvFile(file);
+              }}
+              className="p-6 border-2 border-dashed border-slate-300 hover:border-emerald-500 hover:bg-emerald-50/30 rounded-2xl text-center space-y-2 bg-slate-50 cursor-pointer transition group"
+            >
+              <Upload className="h-8 w-8 text-slate-400 group-hover:text-emerald-600 transition mx-auto" />
+              <div className="text-xs font-bold text-slate-800 group-hover:text-emerald-900">
+                {isTh ? "คลิกเพื่อเลือกไฟล์ หรือลากไฟล์ CSV วางที่นี่" : "Click to select or Drag & Drop CSV here"}
               </div>
               <div className="text-[11px] text-slate-500">
-                {isTh ? "รองรับบาร์โค้ด ชื่อสินค้า ราคาขาย และต้นทุน" : "Supports barcodes, SKU, retail price, cost"}
+                {isTh ? "รองรับหัวตารางภาษาไทย/อังกฤษ (บาร์โค้ด, ชื่อสินค้า, หมวดหมู่, ราคาขาย, ต้นทุน, สต็อก)" : "Supports Thai/English headers (Barcode, Name, Category, Price, Cost, Stock)"}
               </div>
             </div>
 
