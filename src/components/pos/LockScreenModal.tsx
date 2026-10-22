@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Lock, UserCheck, Delete, AlertCircle, ShieldAlert, Store, Clock } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { MOCK_STAFF, StaffMember } from "@/data/mockData";
@@ -14,11 +14,48 @@ export function LockScreenModal({ isOpen, onUnlock }: LockScreenModalProps) {
   const { language } = useLanguage();
   const isTh = language === "th";
 
+  const [staffOptions, setStaffOptions] = useState<StaffMember[]>(MOCK_STAFF);
   const [selectedStaff, setSelectedStaff] = useState<StaffMember>(MOCK_STAFF[0]);
   const [pin, setPin] = useState<string>("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [failedAttempts, setFailedAttempts] = useState<number>(0);
   const [isLockedOut, setIsLockedOut] = useState<boolean>(false);
+
+  useEffect(() => {
+    async function loadStaff() {
+      try {
+        const res = await fetch("/api/staff");
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.staff && Array.isArray(data.staff)) {
+            const mapped: StaffMember[] = data.staff
+              .filter((s: { isActive: boolean }) => s.isActive)
+              .map((s: { id: string; displayName: string; role: "OWNER" | "MANAGER" | "CASHIER" }) => ({
+                id: s.id,
+                name: s.displayName,
+                nameEn: s.displayName,
+                role: s.role,
+                pin: "",
+                avatar:
+                  s.role === "OWNER"
+                    ? "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&h=120&q=80"
+                    : s.role === "CASHIER"
+                    ? "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=120&h=120&q=80"
+                    : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&h=120&q=80",
+                shiftActive: true,
+              }));
+            if (mapped.length > 0) {
+              setStaffOptions(mapped);
+              setSelectedStaff(mapped[0]);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("LockScreen failed to fetch staff:", err);
+      }
+    }
+    loadStaff();
+  }, []);
 
   if (!isOpen) return null;
 
@@ -123,7 +160,7 @@ export function LockScreenModal({ isOpen, onUnlock }: LockScreenModalProps) {
 
         {/* Staff Selector Pills */}
         <div className="w-full grid grid-cols-3 gap-2 mb-6">
-          {MOCK_STAFF.map((staff) => {
+          {staffOptions.map((staff) => {
             const isSelected = selectedStaff.id === staff.id;
             return (
               <button
@@ -140,16 +177,30 @@ export function LockScreenModal({ isOpen, onUnlock }: LockScreenModalProps) {
                     : "bg-[#092218] border-[#103b29] hover:border-emerald-700/60 text-slate-400"
                 }`}
               >
-                <img
-                  src={staff.avatar}
-                  alt={staff.name}
-                  className="w-10 h-10 rounded-full object-cover mb-1.5 border border-emerald-500/40"
-                />
+                <div
+                  className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs text-white mb-1.5 shrink-0 ${
+                    staff.role === "OWNER"
+                      ? "bg-amber-600 ring-2 ring-amber-400"
+                      : staff.role === "MANAGER"
+                      ? "bg-blue-600 ring-2 ring-blue-400"
+                      : "bg-emerald-600 ring-2 ring-emerald-400"
+                  }`}
+                >
+                  {staff.name.slice(0, 2)}
+                </div>
                 <span className="text-[11px] font-bold text-white truncate w-full">
                   {isTh ? staff.name.split(" ")[0] : staff.nameEn}
                 </span>
-                <span className="text-[9px] text-emerald-400 font-mono font-medium">
-                  {staff.role}
+                <span
+                  className={`text-[9px] font-mono font-bold mt-0.5 ${
+                    staff.role === "OWNER"
+                      ? "text-amber-300"
+                      : staff.role === "MANAGER"
+                      ? "text-blue-300"
+                      : "text-emerald-300"
+                  }`}
+                >
+                  {staff.role === "OWNER" ? "OWNER" : staff.role === "MANAGER" ? "MANAGER" : "CASHIER"}
                 </span>
               </button>
             );

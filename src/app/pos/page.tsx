@@ -70,6 +70,42 @@ export default function PosPage() {
 
   // New POS Operations Modals State
   const [activeStaff, setActiveStaff] = useState<StaffMember>(MOCK_STAFF[0]);
+
+  // Sync active staff with authenticated session from /api/auth/me
+  useEffect(() => {
+    async function syncActiveStaff() {
+      try {
+        const res = await fetch("/api/auth/me");
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.user) {
+            setActiveStaff({
+              id: data.user.id,
+              name: data.user.displayName,
+              nameEn: data.user.displayName,
+              role: data.user.role,
+              pin: "",
+              avatar:
+                data.user.role === "OWNER"
+                  ? "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&h=120&q=80"
+                  : data.user.role === "CASHIER"
+                  ? "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=120&h=120&q=80"
+                  : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&h=120&q=80",
+              shiftActive: true,
+            });
+            setShiftState((prev) => ({
+              ...prev,
+              openedBy: data.user.displayName,
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn("Could not sync active staff session:", err);
+      }
+    }
+    syncActiveStaff();
+  }, []);
+
   const [isLockScreenOpen, setIsLockScreenOpen] = useState<boolean>(false);
   const [isShiftModalOpen, setIsShiftModalOpen] = useState<boolean>(false);
   const [shiftState, setShiftState] = useState<ShiftState>({

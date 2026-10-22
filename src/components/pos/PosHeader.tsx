@@ -113,26 +113,48 @@ export function PosHeader({
           <span className="hidden md:inline">{isTh ? "กะ & ลิ้นชัก" : "Shift"}</span>
         </button>
 
-        {/* Cashier Badge */}
+        {/* Active Staff Profile Badge */}
         <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-[#0b291d]/80 border border-emerald-700/30">
-          <img
-            src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=80&h=80&q=80"
-            alt="Cashier"
-            className="w-6 h-6 rounded-full object-cover ring-1 ring-emerald-400/50"
-          />
+          <div
+            className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] text-white shrink-0 ${
+              activeStaffRole === "OWNER"
+                ? "bg-amber-600 ring-1 ring-amber-400"
+                : activeStaffRole === "MANAGER"
+                ? "bg-blue-600 ring-1 ring-blue-400"
+                : "bg-emerald-600 ring-1 ring-emerald-400"
+            }`}
+          >
+            {activeStaffName ? activeStaffName.slice(0, 2) : "KM"}
+          </div>
           <div className="text-left text-xs leading-tight">
-            <div className="font-semibold text-white">{activeStaffName}</div>
-            <div className="text-[9px] text-emerald-300/80 font-mono">{activeStaffRole}</div>
+            <div className="font-semibold text-white truncate max-w-[120px]">{activeStaffName}</div>
+            <div
+              className={`text-[9px] font-mono font-bold ${
+                activeStaffRole === "OWNER"
+                  ? "text-amber-300"
+                  : activeStaffRole === "MANAGER"
+                  ? "text-blue-300"
+                  : "text-emerald-300"
+              }`}
+            >
+              {activeStaffRole === "OWNER"
+                ? isTh ? "👑 เจ้าของร้าน" : "Owner"
+                : activeStaffRole === "MANAGER"
+                ? isTh ? "🛡️ ผู้จัดการ" : "Manager"
+                : isTh ? "🏷️ แคชเชียร์" : "Cashier"}
+            </div>
           </div>
         </div>
 
-        {/* Store Management Link */}
-        <Link
-          href="/dashboard"
-          className="px-3 py-1.5 rounded-lg bg-[#0e3324] hover:bg-[#144733] border border-emerald-700/40 text-emerald-200 hover:text-white text-xs font-medium transition flex items-center gap-1.5 shadow-sm"
-        >
-          <span>{t("nav.storeManagement")}</span>
-        </Link>
+        {/* Store Management Link - Strictly hidden for CASHIER */}
+        {activeStaffRole !== "CASHIER" && (
+          <Link
+            href="/dashboard"
+            className="px-3 py-1.5 rounded-lg bg-[#0e3324] hover:bg-[#144733] border border-emerald-700/40 text-emerald-200 hover:text-white text-xs font-medium transition flex items-center gap-1.5 shadow-sm"
+          >
+            <span>{t("nav.storeManagement")}</span>
+          </Link>
+        )}
 
         {/* Exit / Logout Button */}
         <button
@@ -141,7 +163,7 @@ export function PosHeader({
             try {
               await fetch("/api/auth/logout", { method: "POST" });
             } finally {
-              window.location.href = "/login";
+              window.location.href = "/login?switch=true";
             }
           }}
           title={isTh ? "ออกจากระบบร้านค้า (Logout)" : "Exit Store / Logout"}
