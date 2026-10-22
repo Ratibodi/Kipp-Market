@@ -280,8 +280,14 @@ export async function GET(request: NextRequest) {
 }
 
 function getFallbackData(period: string, startDate: Date, endDate: Date): ProfitAnalyticsResponse {
-  const is30d = period === "30d" || period === "month";
-  const numDays = is30d ? 30 : 7;
+  let numDays = 7;
+  if (period === "today") {
+    numDays = 1;
+  } else if (period === "30d") {
+    numDays = 30;
+  } else if (period === "month") {
+    numDays = Math.max(1, endDate.getDate());
+  }
 
   const baseDailyRevenue = [23500, 24800, 22100, 26900, 28400, 31200, 29800];
   const dayNamesTh = ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."];

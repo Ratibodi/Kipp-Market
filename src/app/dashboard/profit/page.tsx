@@ -26,6 +26,28 @@ import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { useLanguage } from "@/context/LanguageContext";
 import { ProfitAnalyticsResponse } from "@/app/api/dashboard/profit/route";
 
+const THAI_MONTH_SHORT = [
+  "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
+  "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."
+];
+const ENG_MONTH_SHORT = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+];
+
+function getSampledIndices(total: number, maxSamples = 6): number[] {
+  if (total <= 0) return [];
+  if (total <= maxSamples) return Array.from({ length: total }, (_, i) => i);
+  const result: number[] = [];
+  for (let i = 0; i < maxSamples; i++) {
+    const idx = Math.round((i / (maxSamples - 1)) * (total - 1));
+    if (!result.includes(idx)) {
+      result.push(idx);
+    }
+  }
+  return result;
+}
+
 export default function ProfitAnalyticsPage() {
   const { t, language } = useLanguage();
   const isTh = language === "th";
@@ -335,7 +357,7 @@ export default function ProfitAnalyticsPage() {
           {/* Middle Row: Multi-Bar P&L Trend Chart & Category Profitability */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
             {/* Left: Multi-Bar Chart (7 cols) */}
-            <div className="lg:col-span-7 bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between">
+            <div className="lg:col-span-7 bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between overflow-hidden">
               <div>
                 <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
                   <div>
@@ -363,7 +385,7 @@ export default function ProfitAnalyticsPage() {
                   </div>
                 </div>
 
-                {/* SVG Multi-Bar & Margin Line Chart */}
+                {/* Multi-Bar & Margin Line Chart */}
                 <div className="relative mt-6 h-72 w-full">
                   {loading || !data ? (
                     <div className="w-full h-full flex items-center justify-center text-slate-400 text-xs">
@@ -372,37 +394,71 @@ export default function ProfitAnalyticsPage() {
                     </div>
                   ) : (
                     <div className="w-full h-full flex flex-col justify-between">
-                      {/* Interactive Canvas */}
-                      <div className="relative flex-1 w-full flex items-end justify-between px-4 pb-2 border-b border-slate-100">
+                      {/* Interactive Canvas with subtle guide lines */}
+                      <div className="relative flex-1 w-full min-w-0 flex items-end justify-between px-1 sm:px-2 pb-2 border-b border-slate-200">
+                        {/* Background guide lines */}
+                        <div className="absolute inset-x-0 top-0 bottom-2 flex flex-col justify-between pointer-events-none opacity-40">
+                          <div className="border-b border-dashed border-slate-200 w-full" />
+                          <div className="border-b border-dashed border-slate-200 w-full" />
+                          <div className="border-b border-dashed border-slate-200 w-full" />
+                        </div>
+
                         {data.dailyTrend.map((d, idx) => {
-                          const revH = (d.netRevenue / maxDayVal) * 100;
-                          const cogsH = (d.cogs / maxDayVal) * 100;
-                          const profH = Math.max(0, (d.netProfit / maxDayVal) * 100);
+                          const isLongPeriod = data.dailyTrend.length > 10;
+                          const isSingleDay = data.dailyTrend.length === 1;
+                          const revH = Math.min(100, Math.max(0, (d.netRevenue / maxDayVal) * 100));
+                          const cogsH = Math.min(100, Math.max(0, (d.cogs / maxDayVal) * 100));
+                          const profH = Math.min(100, Math.max(0, (d.netProfit / maxDayVal) * 100));
                           const isHovered = hoveredDayIndex === idx;
+
+                          // Dynamic bar sizing
+                          const barWidth = isSingleDay
+                            ? "w-8 sm:w-12 max-w-[48px]"
+                            : isLongPeriod
+                            ? "w-1 sm:w-1.5 md:w-2 max-w-[7px]"
+                            : "w-2.5 sm:w-3.5 md:w-4 max-w-[16px]";
+                          const barGap = isSingleDay
+                            ? "gap-2 sm:gap-3"
+                            : isLongPeriod
+                            ? "gap-[1px] sm:gap-[1.5px]"
+                            : "gap-1 sm:gap-1.5";
 
                           return (
                             <div
                               key={d.date}
                               onMouseEnter={() => setHoveredDayIndex(idx)}
                               onMouseLeave={() => setHoveredDayIndex(null)}
-                              className="relative flex-1 flex flex-col items-center justify-end h-full px-1 group cursor-pointer"
+                              className="relative flex-1 min-w-0 flex flex-col items-center justify-end h-full group cursor-pointer z-10"
                             >
-                              {/* Hover Tooltip Popup */}
+                              {/* Hover Tooltip Popup with edge-safe positioning */}
                               {isHovered && (
-                                <div className="absolute -top-24 z-30 p-2.5 rounded-xl bg-slate-900 text-white text-[11px] shadow-xl border border-slate-700 pointer-events-none whitespace-nowrap min-w-[150px]">
-                                  <div className="font-bold text-[#bef264] border-b border-slate-700 pb-1 mb-1">
-                                    {d.dayLabel} ({d.date})
+                                <div
+                                  className={`absolute -top-28 z-50 p-2.5 rounded-xl bg-slate-900 text-white text-[11px] shadow-2xl border border-slate-700 pointer-events-none whitespace-nowrap min-w-[155px] ${
+                                    idx < 4
+                                      ? "left-0"
+                                      : idx > data.dailyTrend.length - 5
+                                      ? "right-0"
+                                      : "left-1/2 -translate-x-1/2"
+                                  }`}
+                                >
+                                  <div className="font-bold text-[#bef264] border-b border-slate-700/80 pb-1 mb-1.5 flex items-center justify-between">
+                                    <span>{d.dayLabel}</span>
+                                    <span className="text-[10px] text-slate-400 font-mono">{d.date}</span>
                                   </div>
-                                  <div className="flex justify-between gap-3 text-slate-300">
-                                    <span>ยอดขาย:</span>
-                                    <span className="font-mono text-white">฿{d.netRevenue.toLocaleString()}</span>
+                                  <div className="flex justify-between gap-3 text-slate-300 py-0.5">
+                                    <span>{isTh ? "ยอดขาย (Net):" : "Revenue:"}</span>
+                                    <span className="font-mono text-white font-medium">฿{d.netRevenue.toLocaleString()}</span>
                                   </div>
-                                  <div className="flex justify-between gap-3 text-slate-400">
-                                    <span>ต้นทุน:</span>
+                                  <div className="flex justify-between gap-3 text-slate-400 py-0.5">
+                                    <span>{isTh ? "ต้นทุนสินค้า:" : "COGS:"}</span>
                                     <span className="font-mono text-slate-300">-฿{d.cogs.toLocaleString()}</span>
                                   </div>
-                                  <div className="flex justify-between gap-3 text-emerald-400 font-bold border-t border-slate-700/60 pt-1 mt-1">
-                                    <span>กำไรสุทธิ:</span>
+                                  <div className="flex justify-between gap-3 text-amber-300/80 py-0.5">
+                                    <span>{isTh ? "ค่าใช้จ่ายร้าน:" : "Expenses:"}</span>
+                                    <span className="font-mono text-amber-200">-฿{d.expenses.toLocaleString()}</span>
+                                  </div>
+                                  <div className="flex justify-between gap-3 text-emerald-400 font-bold border-t border-slate-700/80 pt-1.5 mt-1">
+                                    <span>{isTh ? "กำไรสุทธิ:" : "Net Profit:"}</span>
                                     <span className="font-mono text-[#bef264]">
                                       ฿{d.netProfit.toLocaleString()} ({d.marginPercent}%)
                                     </span>
@@ -411,33 +467,33 @@ export default function ProfitAnalyticsPage() {
                               )}
 
                               {/* 3 Side-by-Side Bars */}
-                              <div className="w-full flex items-end justify-center gap-0.5 sm:gap-1 h-full">
+                              <div className={`w-full flex items-end justify-center ${barGap} h-full`}>
                                 {/* Bar 1: Net Revenue */}
                                 <div
                                   style={{ height: `${revH}%` }}
-                                  className={`w-2.5 sm:w-3.5 rounded-t-sm bg-[#061a12] transition-all duration-300 ${
-                                    isHovered ? "opacity-100 scale-y-105" : "opacity-90"
+                                  className={`${barWidth} rounded-t-[2px] bg-[#061a12] transition-all duration-200 origin-bottom ${
+                                    isHovered ? "opacity-100 scale-y-105 bg-emerald-950" : "opacity-90"
                                   }`}
                                 />
                                 {/* Bar 2: COGS */}
                                 <div
                                   style={{ height: `${cogsH}%` }}
-                                  className={`w-2.5 sm:w-3.5 rounded-t-sm bg-slate-300 transition-all duration-300 ${
-                                    isHovered ? "opacity-100 scale-y-105" : "opacity-80"
+                                  className={`${barWidth} rounded-t-[2px] bg-slate-300 transition-all duration-200 origin-bottom ${
+                                    isHovered ? "opacity-100 scale-y-105 bg-slate-400" : "opacity-80"
                                   }`}
                                 />
                                 {/* Bar 3: Net Profit */}
                                 <div
                                   style={{ height: `${profH}%` }}
-                                  className={`w-2.5 sm:w-3.5 rounded-t-sm bg-[#84cc16] transition-all duration-300 ${
-                                    isHovered ? "opacity-100 scale-y-105" : "opacity-90"
+                                  className={`${barWidth} rounded-t-[2px] bg-[#84cc16] transition-all duration-200 origin-bottom ${
+                                    isHovered ? "opacity-100 scale-y-105 bg-lime-400" : "opacity-90"
                                   }`}
                                 />
                               </div>
 
                               {/* Margin % Badge above bar on hover */}
                               <div
-                                className={`text-[10px] font-mono font-bold transition-opacity ${
+                                className={`text-[9px] font-mono font-bold transition-opacity absolute -top-4 pointer-events-none ${
                                   isHovered ? "text-emerald-800 opacity-100" : "text-transparent opacity-0"
                                 }`}
                               >
@@ -449,13 +505,47 @@ export default function ProfitAnalyticsPage() {
                       </div>
 
                       {/* X-axis date labels */}
-                      <div className="flex justify-between text-[11px] font-mono text-slate-400 px-4 pt-2">
-                        {data.dailyTrend.map((d) => (
-                          <span key={d.date} className="truncate text-center">
-                            {d.dayLabel}
-                          </span>
-                        ))}
-                      </div>
+                      {data.dailyTrend.length > 10 ? (
+                        <div className="relative w-full h-6 mt-2 px-1 sm:px-2">
+                          {getSampledIndices(data.dailyTrend.length, 6).map((idx, sampleIdx, arr) => {
+                            const d = data.dailyTrend[idx];
+                            const isFirst = sampleIdx === 0;
+                            const isLast = sampleIdx === arr.length - 1;
+                            const pct = (idx / (data.dailyTrend.length - 1)) * 100;
+                            const dateObj = new Date(d.date);
+                            const dayNum = dateObj.getDate();
+                            const monthName = isTh
+                              ? THAI_MONTH_SHORT[dateObj.getMonth()]
+                              : ENG_MONTH_SHORT[dateObj.getMonth()];
+                            const labelText = `${dayNum} ${monthName}`;
+
+                            return (
+                              <span
+                                key={d.date}
+                                style={{
+                                  left: `${pct}%`,
+                                  transform: isFirst
+                                    ? "translateX(0%)"
+                                    : isLast
+                                    ? "translateX(-100%)"
+                                    : "translateX(-50%)",
+                                }}
+                                className="absolute top-1 whitespace-nowrap text-[11px] font-mono font-medium text-slate-500 hover:text-slate-800 transition-colors"
+                              >
+                                {labelText}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="flex justify-between items-center text-xs font-mono text-slate-500 px-1 sm:px-2 pt-2">
+                          {data.dailyTrend.map((d) => (
+                            <span key={d.date} className="text-center flex-1 font-medium">
+                              {d.dayLabel}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
