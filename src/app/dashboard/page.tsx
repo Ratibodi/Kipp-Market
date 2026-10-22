@@ -108,8 +108,10 @@ export default function ManagerDashboardPage() {
     link.setAttribute("download", `kipp_daily_overview_${dateStr}.csv`);
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    setTimeout(() => {
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }, 1000);
   };
 
   return (

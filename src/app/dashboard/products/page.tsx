@@ -711,8 +711,10 @@ export default function ProductsPage() {
                   link.download = "kipp_product_import_template.csv";
                   document.body.appendChild(link);
                   link.click();
-                  document.body.removeChild(link);
-                  URL.revokeObjectURL(url);
+                  setTimeout(() => {
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                  }, 1000);
                   setIsCsvModalOpen(false);
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
@@ -750,8 +752,10 @@ export default function ProductsPage() {
                   link.download = `kipp_catalog_export_${new Date().toISOString().slice(0, 10)}.csv`;
                   document.body.appendChild(link);
                   link.click();
-                  document.body.removeChild(link);
-                  URL.revokeObjectURL(url);
+                  setTimeout(() => {
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                  }, 1000);
                   setIsCsvModalOpen(false);
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-[#84cc16] hover:bg-[#65a30d] text-[#061a12] text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"

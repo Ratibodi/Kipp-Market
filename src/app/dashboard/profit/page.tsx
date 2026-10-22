@@ -115,8 +115,10 @@ export default function ProfitAnalyticsPage() {
     link.setAttribute("download", `kipp_profit_report_${period}_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    setTimeout(() => {
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }, 1000);
   };
 
   const summary = data?.summary;
