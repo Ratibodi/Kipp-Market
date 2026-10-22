@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Store,
@@ -12,8 +13,32 @@ import {
 import { LanguageToggle } from "@/components/common/LanguageToggle";
 import { useLanguage } from "@/context/LanguageContext";
 
+interface HeaderUser {
+  id: string;
+  displayName: string;
+  role: "OWNER" | "MANAGER" | "CASHIER";
+}
+
 export function DashboardHeader() {
   const { t } = useLanguage();
+  const [currentUser, setCurrentUser] = useState<HeaderUser | null>(null);
+
+  useEffect(() => {
+    async function fetchMe() {
+      try {
+        const res = await fetch("/api/auth/me");
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.user) {
+            setCurrentUser(data.user);
+          }
+        }
+      } catch (err) {
+        console.warn("Header fetch me failed:", err);
+      }
+    }
+    fetchMe();
+  }, []);
 
   return (
     <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0 select-none font-sans">
@@ -66,15 +91,29 @@ export function DashboardHeader() {
         </Link>
 
         {/* User Avatar & Logout */}
-        <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
-          <img
-            src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=80&h=80&q=80"
-            alt="Somchai P."
-            className="w-8 h-8 rounded-full object-cover ring-1 ring-slate-300"
-          />
+        <div className="flex items-center gap-2.5 pl-3 border-l border-slate-200">
+          <div
+            className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs text-white shrink-0 ${
+              currentUser?.role === "OWNER"
+                ? "bg-amber-600 ring-2 ring-amber-300"
+                : currentUser?.role === "MANAGER"
+                ? "bg-blue-600 ring-2 ring-blue-300"
+                : "bg-emerald-600 ring-2 ring-emerald-300"
+            }`}
+          >
+            {currentUser?.displayName ? currentUser.displayName.slice(0, 2) : "KM"}
+          </div>
           <div className="hidden md:block text-left text-xs leading-tight">
-            <div className="font-bold text-slate-900">Somchai P.</div>
-            <div className="text-[10px] text-slate-500 font-mono">ID #8841</div>
+            <div className="font-bold text-slate-900 truncate max-w-[130px]">
+              {currentUser?.displayName || "กำลังโหลด..."}
+            </div>
+            <div className="text-[10px] text-slate-500 font-medium">
+              {currentUser?.role === "OWNER"
+                ? "👑 เจ้าของร้าน"
+                : currentUser?.role === "MANAGER"
+                ? "🛡️ ผู้จัดการสาขา"
+                : "🏷️ แคชเชียร์"}
+            </div>
           </div>
 
           <button
@@ -83,7 +122,7 @@ export function DashboardHeader() {
               try {
                 await fetch("/api/auth/logout", { method: "POST" });
               } finally {
-                window.location.href = "/login";
+                window.location.href = "/login?switch=true";
               }
             }}
             title="ออกจากระบบ (Logout)"

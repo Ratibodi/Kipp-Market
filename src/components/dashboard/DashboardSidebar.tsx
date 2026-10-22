@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -18,8 +19,19 @@ import {
   Store,
   LogOut,
   Users,
+  Lock,
+  ShieldCheck,
+  Crown,
 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
+
+interface CurrentUser {
+  id: string;
+  displayName: string;
+  role: "OWNER" | "MANAGER" | "CASHIER";
+  tenantId: string;
+  branchId?: string;
+}
 
 export function DashboardSidebar() {
   const pathname = usePathname();
@@ -28,6 +40,25 @@ export function DashboardSidebar() {
 
   const isDashboard = pathname === "/dashboard";
   const isTransactions = pathname.startsWith("/dashboard/transactions") || pathname === "/transactions";
+
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+
+  useEffect(() => {
+    async function fetchMe() {
+      try {
+        const res = await fetch("/api/auth/me");
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.user) {
+            setCurrentUser(data.user);
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to fetch current user session:", err);
+      }
+    }
+    fetchMe();
+  }, []);
 
   return (
     <aside className="w-64 bg-[#071912] text-slate-300 flex flex-col justify-between shrink-0 select-none border-r border-[#0d2a1d] min-h-screen font-sans">
@@ -184,59 +215,99 @@ export function DashboardSidebar() {
             </Link>
           </div>
 
-          {/* STORE SETTINGS & PLATFORM */}
-          <div className="flex flex-col gap-1">
-            <div className="px-3 text-[10px] font-bold text-slate-500 tracking-wider uppercase">
-              {isTh ? "การตั้งค่า & แพลตฟอร์ม" : "Settings & Platform"}
+          {/* STORE SETTINGS & PLATFORM - Visible only to OWNER, or locked for MANAGER */}
+          {(!currentUser || currentUser.role === "OWNER") && (
+            <div className="flex flex-col gap-1">
+              <div className="px-3 text-[10px] font-bold text-slate-500 tracking-wider uppercase">
+                {isTh ? "การตั้งค่า & เจ้าของร้าน" : "Settings & Store Owner"}
+              </div>
+              <Link
+                href="/dashboard/staff"
+                className={`flex items-center gap-2.5 px-3 py-1.5 rounded-xl transition ${
+                  pathname.startsWith("/dashboard/staff")
+                    ? "bg-[#bef264] text-[#061a12] font-bold shadow-sm"
+                    : "text-slate-300 hover:text-white hover:bg-[#0c2e20]"
+                }`}
+              >
+                <Users className="h-4 w-4" />
+                <span>{isTh ? "จัดการพนักงาน & แคชเชียร์" : "Staff & Cashiers"}</span>
+              </Link>
+              <Link
+                href="/dashboard/settings"
+                className={`flex items-center gap-2.5 px-3 py-1.5 rounded-xl transition ${
+                  pathname.startsWith("/dashboard/settings")
+                    ? "bg-[#bef264] text-[#061a12] font-bold shadow-sm"
+                    : "text-slate-300 hover:text-white hover:bg-[#0c2e20]"
+                }`}
+              >
+                <Store className="h-4 w-4" />
+                <span>{isTh ? "ตั้งค่า PromptPay & ร้าน" : "Store & Payment Settings"}</span>
+              </Link>
+              <Link
+                href="/admin"
+                className={`flex items-center gap-2.5 px-3 py-1.5 rounded-xl transition ${
+                  pathname.startsWith("/admin")
+                    ? "bg-purple-400 text-slate-950 font-bold shadow-sm"
+                    : "text-purple-300/80 hover:text-purple-200 hover:bg-[#0c2e20]"
+                }`}
+              >
+                <Crown className="h-4 w-4 text-purple-400" />
+                <span>{isTh ? "Super Admin (แพลตฟอร์ม)" : "Platform Super Admin"}</span>
+              </Link>
             </div>
-            <Link
-              href="/dashboard/staff"
-              className={`flex items-center gap-2.5 px-3 py-1.5 rounded-xl transition ${
-                pathname.startsWith("/dashboard/staff")
-                  ? "bg-[#bef264] text-[#061a12] font-bold shadow-sm"
-                  : "text-slate-300 hover:text-white hover:bg-[#0c2e20]"
-              }`}
-            >
-              <Users className="h-4 w-4" />
-              <span>{isTh ? "จัดการพนักงาน & แคชเชียร์" : "Staff & Cashiers"}</span>
-            </Link>
-            <Link
-              href="/dashboard/settings"
-              className={`flex items-center gap-2.5 px-3 py-1.5 rounded-xl transition ${
-                pathname.startsWith("/dashboard/settings")
-                  ? "bg-[#bef264] text-[#061a12] font-bold shadow-sm"
-                  : "text-slate-300 hover:text-white hover:bg-[#0c2e20]"
-              }`}
-            >
-              <Store className="h-4 w-4" />
-              <span>{isTh ? "ตั้งค่า PromptPay & ร้าน" : "Store & Payment Settings"}</span>
-            </Link>
-            <Link
-              href="/admin"
-              className={`flex items-center gap-2.5 px-3 py-1.5 rounded-xl transition ${
-                pathname.startsWith("/admin")
-                  ? "bg-purple-400 text-slate-950 font-bold shadow-sm"
-                  : "text-purple-300/80 hover:text-purple-200 hover:bg-[#0c2e20]"
-              }`}
-            >
-              <Users className="h-4 w-4 text-purple-400" />
-              <span>{isTh ? "Super Admin (แพลตฟอร์ม)" : "Platform Super Admin"}</span>
-            </Link>
-          </div>
+          )}
+
+          {currentUser?.role === "MANAGER" && (
+            <div className="mx-1 p-2.5 rounded-2xl bg-[#051710] border border-blue-900/50 text-xs space-y-1">
+              <div className="flex items-center gap-1.5 text-blue-400 font-bold text-[11px]">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                <span>{isTh ? "บัญชีผู้จัดการสาขา" : "Store Manager Mode"}</span>
+              </div>
+              <p className="text-[10px] text-slate-400 leading-tight">
+                {isTh
+                  ? "เมนูจัดการทีมงานและตั้งค่าบัญชีรับเงิน สงวนสิทธิ์ให้เจ้าของร้านเท่านั้น"
+                  : "Staff PIN management & payment settings are restricted to Store Owner."}
+              </p>
+            </div>
+          )}
         </nav>
       </div>
 
-      {/* User Profile at Bottom */}
-      <div className="p-4 border-t border-[#0e2f20] bg-[#05140e] flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <img
-            src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=80&h=80&q=80"
-            alt="Somchai P."
-            className="w-8 h-8 rounded-full object-cover ring-1 ring-emerald-400/50"
-          />
-          <div className="text-xs leading-tight">
-            <div className="font-bold text-white">{isTh ? "สมชาย พ." : "Somchai P."}</div>
-            <div className="text-[10px] text-slate-400">{t("nav.storeManager")}</div>
+      {/* Dynamic User Profile at Bottom */}
+      <div className="p-3.5 border-t border-[#0e2f20] bg-[#05140e] flex items-center justify-between">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div
+            className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
+              currentUser?.role === "OWNER"
+                ? "bg-amber-500/20 text-amber-300 ring-1 ring-amber-400/50"
+                : currentUser?.role === "MANAGER"
+                ? "bg-blue-500/20 text-blue-300 ring-1 ring-blue-400/50"
+                : "bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-400/50"
+            }`}
+          >
+            {currentUser?.displayName ? currentUser.displayName.slice(0, 2) : "KM"}
+          </div>
+          <div className="text-xs leading-tight min-w-0">
+            <div className="font-bold text-white truncate">
+              {currentUser?.displayName || (isTh ? "กำลังโหลดโปรไฟล์..." : "Loading...")}
+            </div>
+            <div className="flex items-center gap-1 mt-0.5">
+              <span
+                className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full font-mono uppercase ${
+                  currentUser?.role === "OWNER"
+                    ? "bg-amber-950/80 text-amber-300 border border-amber-800/60"
+                    : currentUser?.role === "MANAGER"
+                    ? "bg-blue-950/80 text-blue-300 border border-blue-800/60"
+                    : "bg-emerald-950/80 text-emerald-300 border border-emerald-800/60"
+                }`}
+              >
+                {currentUser?.role === "OWNER"
+                  ? isTh ? "👑 เจ้าของร้าน" : "Owner"
+                  : currentUser?.role === "MANAGER"
+                  ? isTh ? "🛡️ ผู้จัดการ" : "Manager"
+                  : isTh ? "🏷️ แคชเชียร์" : "Cashier"}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -246,11 +317,11 @@ export function DashboardSidebar() {
             try {
               await fetch("/api/auth/logout", { method: "POST" });
             } finally {
-              window.location.href = "/login";
+              window.location.href = "/login?switch=true";
             }
           }}
           title={isTh ? "ออกจากระบบ (Logout)" : "Log Out"}
-          className="text-slate-400 hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-950/40 transition cursor-pointer"
+          className="text-slate-400 hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-950/40 transition cursor-pointer shrink-0"
         >
           <LogOut className="h-4 w-4" />
         </button>
