@@ -695,7 +695,24 @@ export default function ProductsPage() {
               <button
                 type="button"
                 onClick={() => {
-                  alert(isTh ? "ดาวน์โหลดไฟล์แม่แบบ CSV สำเร็จ" : "Template CSV downloaded");
+                  const templateHeaders = isTh
+                    ? ["บาร์โค้ด", "ชื่อสินค้า (ไทย)", "ชื่อสินค้า (อังกฤษ)", "หมวดหมู่", "ประเภทการขาย (UNIT/WEIGHT)", "หน่วยนับ", "ราคาขาย (บาท)", "ต้นทุน (บาท)", "สต็อกเริ่มต้น"]
+                    : ["Barcode", "Name (TH)", "Name (EN)", "Category", "Sale Type (UNIT/WEIGHT)", "Unit", "Price (THB)", "Cost (THB)", "Initial Stock"];
+                  const sampleRows = [
+                    ['"8850188200142"', '"นมเปรี้ยวบีทาเก้น 400ml"', '"Betagen 400ml"', '"Beverages"', '"UNIT"', '"ขวด"', "25.00", "18.00", "24"],
+                    ['"8851717040214"', '"กล้วยหอมทอง (กิโลกรัม)"', '"Cavendish Banana"', '"Fresh Produce"', '"WEIGHT"', '"กก."', "45.00", "30.00", "15"],
+                    ['"8850999015112"', '"ไข่ไก่สด เบอร์ 2 (แพ็ก 10 ฟอง)"', '"Fresh Eggs No.2 10s"', '"Dairy & Eggs"', '"UNIT"', '"แพ็ก"', "58.00", "44.00", "30"],
+                  ];
+                  const csvContent = "\uFEFF" + [templateHeaders.join(","), ...sampleRows.map((r) => r.join(","))].join("\n");
+                  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+                  const url = URL.createObjectURL(blob);
+                  const link = document.createElement("a");
+                  link.href = url;
+                  link.download = "kipp_product_import_template.csv";
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  URL.revokeObjectURL(url);
                   setIsCsvModalOpen(false);
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
@@ -706,7 +723,35 @@ export default function ProductsPage() {
               <button
                 type="button"
                 onClick={() => {
-                  alert(isTh ? "ส่งออกรายการสินค้า 8 รายการเป็น CSV สำเร็จ" : "Exported 8 products to CSV");
+                  const exportHeaders = isTh
+                    ? ["รหัสสินค้า", "บาร์โค้ด", "PLU", "ชื่อสินค้า (ไทย)", "ชื่อสินค้า (อังกฤษ)", "หมวดหมู่", "ประเภทการขาย", "หน่วย", "ราคาขาย (บาท)", "ราคาต้นทุน (บาท)", "จำนวนคงเหลือ", "ขายด่วน POS"]
+                    : ["ID", "Barcode", "PLU", "Name (TH)", "Name (EN)", "Category", "Sale Type", "Unit", "Price (THB)", "Cost (THB)", "Stock Qty", "Quick Key"];
+
+                  const rows = products.map((p) => [
+                    `"${p.id}"`,
+                    `"${p.barcode}"`,
+                    `"${p.plu || ""}"`,
+                    `"${p.nameTh}"`,
+                    `"${p.nameEn}"`,
+                    `"${p.category}"`,
+                    `"${p.saleType}"`,
+                    `"${p.unit}"`,
+                    p.price.toFixed(2),
+                    p.avgCost.toFixed(2),
+                    p.stockQty.toString(),
+                    p.isQuickKey ? (isTh ? '"ใช่"' : '"Yes"') : (isTh ? '"ไม่ใช่"' : '"No"'),
+                  ]);
+
+                  const csvContent = "\uFEFF" + [exportHeaders.join(","), ...rows.map((r) => r.join(","))].join("\n");
+                  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+                  const url = URL.createObjectURL(blob);
+                  const link = document.createElement("a");
+                  link.href = url;
+                  link.download = `kipp_catalog_export_${new Date().toISOString().slice(0, 10)}.csv`;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  URL.revokeObjectURL(url);
                   setIsCsvModalOpen(false);
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-[#84cc16] hover:bg-[#65a30d] text-[#061a12] text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"

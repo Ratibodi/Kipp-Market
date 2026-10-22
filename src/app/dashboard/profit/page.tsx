@@ -92,28 +92,31 @@ export default function ProfitAnalyticsPage() {
   const handleExportCsv = () => {
     if (!data) return;
 
-    const headers = ["Date", "Day", "Net Revenue (THB)", "COGS (THB)", "Expenses (THB)", "Net Profit (THB)", "Margin (%)"];
+    const headers = isTh
+      ? ["วันที่", "วัน", "ยอดขายสุทธิ (บาท)", "ต้นทุนสินค้า COGS (บาท)", "ค่าใช้จ่ายดำเนินงาน (บาท)", "กำไรสุทธิ (บาท)", "อัตรากำไร (%)"]
+      : ["Date", "Day", "Net Revenue (THB)", "COGS (THB)", "Expenses (THB)", "Net Profit (THB)", "Margin (%)"];
+
     const rows = data.dailyTrend.map((d) => [
-      d.date,
-      d.dayLabel,
-      d.netRevenue,
-      d.cogs,
-      d.expenses,
-      d.netProfit,
-      d.marginPercent,
+      `"${d.date}"`,
+      `"${d.dayLabel}"`,
+      d.netRevenue.toFixed(2),
+      d.cogs.toFixed(2),
+      d.expenses.toFixed(2),
+      d.netProfit.toFixed(2),
+      `${d.marginPercent.toFixed(1)}%`,
     ]);
 
-    const csvContent =
-      "data:text/csv;charset=utf-8," +
-      [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-
-    const encodedUri = encodeURI(csvContent);
+    // Prepend UTF-8 BOM (\uFEFF) so Microsoft Excel opens Thai characters seamlessly
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
+    link.setAttribute("href", url);
     link.setAttribute("download", `kipp_profit_report_${period}_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const summary = data?.summary;

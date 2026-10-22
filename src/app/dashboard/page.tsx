@@ -68,6 +68,50 @@ export default function ManagerDashboardPage() {
     overview?.currentHourDecimal || 14.63
   );
 
+  const handleExportOverviewReport = () => {
+    const summary = overview?.summary;
+    const dateStr = new Date().toISOString().slice(0, 10);
+
+    const kpiHeaders = isTh
+      ? ["ตัวชี้วัด", "มูลค่า", "หน่วย"]
+      : ["Metric", "Value", "Unit"];
+
+    const kpiRows = [
+      [isTh ? '"ยอดขายรวมวันนี้ (Gross Sales)"' : '"Gross Sales Today"', (summary?.grossSales ?? 24850).toFixed(2), isTh ? '"บาท"' : '"THB"'],
+      [isTh ? '"ยอดขายเมื่อวาน (Yesterday Sales)"' : '"Yesterday Sales"', (summary?.yesterdayGrossSales ?? 21750).toFixed(2), isTh ? '"บาท"' : '"THB"'],
+      [isTh ? '"อัตราเติบโตเทียบเมื่อวาน (Growth)"' : '"Growth vs Yesterday"', `${(summary?.growthPercent ?? 14.2).toFixed(1)}%`, '"%"'],
+      [isTh ? '"กำไรขั้นต้นประเมิน (Gross Profit)"' : '"Estimated Gross Profit"', (summary?.grossProfit ?? 8450).toFixed(2), isTh ? '"บาท"' : '"THB"'],
+      [isTh ? '"อัตรากำไร (Margin)"' : '"Profit Margin"', `${(summary?.profitMarginPercent ?? 34.0).toFixed(1)}%`, '"%"'],
+      [isTh ? '"จำนวนบิลทั้งหมด (Total Transactions)"' : '"Total Transactions"', (summary?.totalTransactions ?? 186).toString(), isTh ? '"บิล"' : '"Bills"'],
+      [isTh ? '"ยอดซื้อเฉลี่ยต่อบิล (Avg Basket Size)"' : '"Avg Basket Size"', (summary?.avgBasketSize ?? 3.2).toFixed(1), isTh ? '"ชิ้น/บิล"' : '"Items/Bill"'],
+      ["", "", ""],
+      [isTh ? '"--- สัดส่วนการชำระเงิน ---"' : '"--- Payment Distribution ---"', "", ""],
+      [isTh ? '"พร้อมเพย์ QR (PromptPay)"' : '"PromptPay QR"', (overview?.paymentDistribution.promptpay ?? 16900).toFixed(2), isTh ? '"บาท"' : '"THB"'],
+      [isTh ? '"เงินสด (Cash)"' : '"Cash"', (overview?.paymentDistribution.cash ?? 4970).toFixed(2), isTh ? '"บาท"' : '"THB"'],
+      [isTh ? '"บัตรเครดิต/เดบิต (Credit/Debit)"' : '"Credit/Debit Card"', (overview?.paymentDistribution.creditCard ?? 2485).toFixed(2), isTh ? '"บาท"' : '"THB"'],
+      [isTh ? '"ทรูมันนี่ (TrueMoney)"' : '"TrueMoney"', (overview?.paymentDistribution.trueMoney ?? 495).toFixed(2), isTh ? '"บาท"' : '"THB"'],
+      ["", "", ""],
+      [isTh ? '"--- ยอดขายรายชั่วโมง (Hourly Performance) ---"' : '"--- Hourly Sales ---"', "", ""],
+      [isTh ? '"ช่วงเวลา"' : '"Time"', isTh ? '"ยอดขายจริงวันนี้ (บาท)"' : '"Today Sales (THB)"', isTh ? '"ยอดขายเมื่อวาน (บาท)"' : '"Yesterday Sales (THB)"'],
+      ...(overview?.hourlyPoints || defaultHourlyPoints).map((pt) => [
+        `"${pt.label}"`,
+        (pt.actualRevenue ?? pt.projectedRevenue ?? 0).toFixed(2),
+        (pt.yesterdayRevenue ?? 0).toFixed(2),
+      ]),
+    ];
+
+    const csvContent = "\uFEFF" + [kpiHeaders.join(","), ...kpiRows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `kipp_daily_overview_${dateStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="flex min-h-screen bg-[#f8faf9] text-slate-800 font-sans">
       {/* Sidebar */}
@@ -110,7 +154,8 @@ export default function ManagerDashboardPage() {
 
               <button
                 type="button"
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#061a12] text-white hover:bg-[#0d2a1d] text-xs font-bold shadow-sm transition"
+                onClick={handleExportOverviewReport}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#061a12] text-white hover:bg-[#0d2a1d] text-xs font-bold shadow-sm transition cursor-pointer"
               >
                 <Download className="h-3.5 w-3.5" />
                 <span>{t("dash.exportReport")}</span>

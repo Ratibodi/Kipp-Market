@@ -41,6 +41,36 @@ export default function TransactionsAuditPage() {
   const selectedTrx =
     MOCK_TRANSACTIONS.find((t) => t.trxId === selectedTrxId) || MOCK_TRANSACTIONS[0];
 
+  const handleExportCsv = () => {
+    const headers = isTh
+      ? ["รหัสบิล", "เวลา", "แคชเชียร์", "ช่องทาง/เครื่อง", "จำนวนชิ้น", "ภาษี 7% (บาท)", "ยอดรวม (บาท)", "วิธีการชำระเงิน", "สถานะ"]
+      : ["Transaction ID", "Time", "Cashier", "Lane", "Items", "VAT 7% (THB)", "Total (THB)", "Payment Method", "Status"];
+
+    const rows = MOCK_TRANSACTIONS.map((trx) => [
+      `"${trx.trxId}"`,
+      `"${trx.time}"`,
+      `"${isTh && trx.cashier === "Somchai P." ? "สมชาย พ." : isTh && trx.cashier === "Noon R." ? "นุ่น ร." : trx.cashier}"`,
+      `"${isTh ? trx.lane.replace("Lane", "เลน") : trx.lane}"`,
+      `"${trx.itemsSummary}"`,
+      trx.vat7.toFixed(2),
+      trx.total.toFixed(2),
+      `"${isTh && trx.payment === "PromptPay" ? "พร้อมเพย์ QR" : isTh && trx.payment === "Cash" ? "เงินสด" : isTh && trx.payment === "Credit" ? "บัตรเครดิต" : trx.payment}"`,
+      `"${isTh && trx.status === "Settled" ? "ชำระแล้ว" : isTh && trx.status === "Voided" ? "ยกเลิก" : isTh && trx.status === "Partially Refunded" ? "คืนเงินบางส่วน" : trx.status}"`,
+    ]);
+
+    // Prepend UTF-8 BOM (\uFEFF) so Microsoft Excel opens Thai characters seamlessly
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `kipp_transactions_audit_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="flex min-h-screen bg-[#f8faf9] text-slate-800 font-sans">
       {/* Sidebar */}
@@ -136,7 +166,8 @@ export default function TransactionsAuditPage() {
             <div className="flex items-center gap-2.5">
               <button
                 type="button"
-                className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs font-semibold shadow-2xs transition"
+                onClick={handleExportCsv}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs font-semibold shadow-2xs transition cursor-pointer"
               >
                 <Download className="h-3.5 w-3.5 text-slate-500" />
                 <span>{t("trx.exportCsv")}</span>
