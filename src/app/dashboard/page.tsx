@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Banknote,
@@ -21,10 +22,44 @@ import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { STOCK_REORDER_WARNINGS } from "@/data/mockData";
 import { useLanguage } from "@/context/LanguageContext";
+import { generateHourlyCurvePaths, HourlySalesPoint } from "@/lib/hourlyCurve";
+import type { DashboardOverviewResponse } from "@/app/api/dashboard/overview/route";
+
+const defaultHourlyPoints: HourlySalesPoint[] = [
+  { hour: 6, label: "06:00", actualRevenue: 2400, yesterdayRevenue: 2200 },
+  { hour: 8, label: "08:00", actualRevenue: 3000, yesterdayRevenue: 2800 },
+  { hour: 10, label: "10:00", actualRevenue: 4200, yesterdayRevenue: 3800 },
+  { hour: 12, label: "12:00", actualRevenue: 7400, yesterdayRevenue: 6200 },
+  { hour: 14, label: "14:00", actualRevenue: 4000, yesterdayRevenue: 3400 },
+  { hour: 16, label: "16:00", actualRevenue: null, projectedRevenue: 4100, yesterdayRevenue: 3500 },
+  { hour: 18, label: "18:00", actualRevenue: null, projectedRevenue: 7200, yesterdayRevenue: 6800 },
+  { hour: 20, label: "20:00", actualRevenue: null, projectedRevenue: 4500, yesterdayRevenue: 3800 },
+  { hour: 22, label: "22:00", actualRevenue: null, projectedRevenue: 2500, yesterdayRevenue: 2200 },
+];
 
 export default function ManagerDashboardPage() {
   const { t, language } = useLanguage();
   const isTh = language === "th";
+
+  const [overview, setOverview] = useState<DashboardOverviewResponse | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    fetch("/api/dashboard/overview")
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.error) {
+          setOverview(data);
+        }
+      })
+      .catch((err) => console.warn("Could not fetch overview data:", err))
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  const curvePaths = generateHourlyCurvePaths(
+    overview?.hourlyPoints || defaultHourlyPoints,
+    overview?.currentHourDecimal || 14.63
+  );
 
   return (
     <div className="flex min-h-screen bg-[#f8faf9] text-slate-800 font-sans">
@@ -100,12 +135,12 @@ export default function ManagerDashboardPage() {
                   </div>
                 </div>
                 <div className="text-3xl font-black text-slate-950 font-mono tracking-tight mt-1">
-                  ฿24,850.00
+                  ฿{(overview?.summary.grossSales ?? 24850).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 mt-2">
                   <ArrowUpRight className="h-3.5 w-3.5" />
-                  <span>+14.2%</span>
-                  <span className="text-slate-500 font-normal">{t("dash.vsYesterday")} (฿21,750.00)</span>
+                  <span>{(overview?.summary.growthPercent ?? 14.2) > 0 ? "+" : ""}{overview?.summary.growthPercent ?? 14.2}%</span>
+                  <span className="text-slate-500 font-normal">{t("dash.vsYesterday")} (฿{(overview?.summary.yesterdayGrossSales ?? 21750).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</span>
                 </div>
                 <div className="text-[11px] text-slate-500 mt-1">
                   {t("dash.netSales")}
@@ -135,10 +170,10 @@ export default function ManagerDashboardPage() {
                 </div>
                 <div className="flex items-baseline gap-2 mt-1">
                   <span className="text-3xl font-black text-slate-950 font-mono tracking-tight">
-                    ฿6,420.00
+                    ฿{(overview?.summary.grossProfit ?? 6420).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                   <span className="px-2 py-0.5 rounded-full bg-[#bef264] text-[#061a12] text-[11px] font-black">
-                    {t("dash.margin")} 27.8%
+                    {t("dash.margin")} {overview?.summary.profitMarginPercent ?? 27.8}%
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 mt-2">
@@ -173,12 +208,12 @@ export default function ManagerDashboardPage() {
                 </div>
                 <div className="flex items-baseline gap-1.5 mt-1">
                   <span className="text-3xl font-black text-slate-950 font-mono tracking-tight">
-                    186
+                    {overview?.summary.totalTransactions ?? 186}
                   </span>
                   <span className="text-xs font-semibold text-slate-500">{t("dash.salesLogged")}</span>
                 </div>
                 <div className="text-xs text-slate-600 mt-2 flex items-center gap-2">
-                  <span>{t("dash.avgBasket")} <strong className="font-mono text-slate-900">฿133.60</strong></span>
+                  <span>{t("dash.avgBasket")} <strong className="font-mono text-slate-900">฿{(overview?.summary.grossSales && overview.summary.totalTransactions ? (overview.summary.grossSales / overview.summary.totalTransactions) : 133.6).toFixed(2)}</strong></span>
                 </div>
                 <div className="text-[11px] text-slate-500 mt-1">
                   {t("dash.peakHour")}
@@ -290,36 +325,34 @@ export default function ManagerDashboardPage() {
                     </defs>
 
                     {/* Area fills (Rendered first as background) */}
-                    {/* Today Actual Area gradient fill (06:00 to NOW 14:38) */}
                     <path
-                      d="M 50 170 C 90 165, 130 140, 180 120 C 215 105, 238 45, 265 45 C 290 45, 312 115, 330 130 L 330 190 L 50 190 Z"
+                      d={curvePaths.todayAreaPath}
                       fill="url(#todayGrad)"
                     />
 
-                    {/* Today Projected Area gradient fill (NOW 14:38 to 22:00) */}
                     <path
-                      d="M 330 130 C 348 145, 380 138, 410 100 C 435 70, 445 48, 455 48 C 475 48, 495 85, 520 125 C 540 150, 555 160, 570 165 L 570 190 L 330 190 Z"
+                      d={curvePaths.projectedAreaPath}
                       fill="url(#projectedGrad)"
                     />
 
-                    {/* Yesterday line (dashed slate #94a3b8 for clear visibility) */}
+                    {/* Yesterday line (dashed slate #94a3b8) */}
                     <path
-                      d="M 50 175 C 90 170, 130 150, 180 135 C 215 125, 240 75, 265 75 C 295 75, 315 145, 345 145 C 385 145, 420 60, 455 60 C 490 60, 520 135, 545 160 C 555 170, 562 175, 570 175"
+                      d={curvePaths.yesterdayPath}
                       fill="none"
                       stroke="#94a3b8"
                       strokeWidth="2.2"
                       strokeDasharray="4 4"
                     />
 
-                    {/* Vertical dashed guide for Lunch Peak 12:30 */}
-                    <line x1="265" y1="30" x2="265" y2="190" stroke="#84cc16" strokeDasharray="3 3" strokeWidth="1.2" />
+                    {/* Vertical dashed guide for Lunch Peak */}
+                    <line x1={curvePaths.lunchPeak.x} y1="30" x2={curvePaths.lunchPeak.x} y2="190" stroke="#84cc16" strokeDasharray="3 3" strokeWidth="1.2" />
 
                     {/* Vertical dashed guide for Current Time NOW */}
-                    <line x1="330" y1="30" x2="330" y2="190" stroke="#ef4444" strokeDasharray="3 3" strokeWidth="1.2" />
+                    <line x1={curvePaths.nowCoordinate.x} y1="30" x2={curvePaths.nowCoordinate.x} y2="190" stroke="#ef4444" strokeDasharray="3 3" strokeWidth="1.2" />
 
                     {/* Today Actual line (bold dark green #061a12 up to NOW) */}
                     <path
-                      d="M 50 170 C 90 165, 130 140, 180 120 C 215 105, 238 45, 265 45 C 290 45, 312 115, 330 130"
+                      d={curvePaths.todayActualPath}
                       fill="none"
                       stroke="#061a12"
                       strokeWidth="3.5"
@@ -328,7 +361,7 @@ export default function ManagerDashboardPage() {
 
                     {/* Today Projected Evening curve (dashed emerald from NOW to 22:00) */}
                     <path
-                      d="M 330 130 C 348 145, 380 138, 410 100 C 435 70, 445 48, 455 48 C 475 48, 495 85, 520 125 C 540 150, 555 160, 570 165"
+                      d={curvePaths.projectedPath}
                       fill="none"
                       stroke="#10b981"
                       strokeWidth="2.5"
@@ -337,24 +370,24 @@ export default function ManagerDashboardPage() {
                     />
 
                     {/* Lunch Peak Marker */}
-                    <circle cx="265" cy="45" r="4.5" fill="#84cc16" stroke="#061a12" strokeWidth="2" />
-                    <rect x="225" y="16" width="80" height="18" rx="4" fill="#061a12" stroke="#84cc16" strokeWidth="0.8" />
-                    <text x="265" y="28" textAnchor="middle" fill="#bef264" fontSize="8" fontWeight="bold">
+                    <circle cx={curvePaths.lunchPeak.x} cy={curvePaths.lunchPeak.y} r="4.5" fill="#84cc16" stroke="#061a12" strokeWidth="2" />
+                    <rect x={curvePaths.lunchPeak.x - 40} y={Math.max(12, curvePaths.lunchPeak.y - 28)} width="80" height="18" rx="4" fill="#061a12" stroke="#84cc16" strokeWidth="0.8" />
+                    <text x={curvePaths.lunchPeak.x} y={Math.max(24, curvePaths.lunchPeak.y - 16)} textAnchor="middle" fill="#bef264" fontSize="8" fontWeight="bold">
                       LUNCH PEAK 12:30
                     </text>
 
                     {/* Dinner Peak Marker (Target / Projected) */}
-                    <circle cx="455" cy="48" r="4" fill="#10b981" stroke="#061a12" strokeWidth="2" />
-                    <rect x="405" y="18" width="100" height="18" rx="4" fill="#061a12" stroke="#10b981" strokeWidth="0.8" />
-                    <text x="455" y="30" textAnchor="middle" fill="#6ee7b7" fontSize="8" fontWeight="bold">
+                    <circle cx={curvePaths.dinnerPeak.x} cy={curvePaths.dinnerPeak.y} r="4" fill="#10b981" stroke="#061a12" strokeWidth="2" />
+                    <rect x={curvePaths.dinnerPeak.x - 50} y={Math.max(14, curvePaths.dinnerPeak.y - 28)} width="100" height="18" rx="4" fill="#061a12" stroke="#10b981" strokeWidth="0.8" />
+                    <text x={curvePaths.dinnerPeak.x} y={Math.max(26, curvePaths.dinnerPeak.y - 16)} textAnchor="middle" fill="#6ee7b7" fontSize="8" fontWeight="bold">
                       DINNER 18:30 (EST)
                     </text>
 
                     {/* Current Time NOW marker */}
-                    <circle cx="330" cy="130" r="7" fill="#ef4444" opacity="0.3" className="animate-ping" />
-                    <circle cx="330" cy="130" r="4.5" fill="#ef4444" stroke="#ffffff" strokeWidth="1.5" />
-                    <rect x="318" y="142" width="24" height="15" rx="3" fill="#ef4444" />
-                    <text x="330" y="153" textAnchor="middle" fill="#ffffff" fontSize="8" fontWeight="bold">
+                    <circle cx={curvePaths.nowCoordinate.x} cy={curvePaths.nowCoordinate.y} r="7" fill="#ef4444" opacity="0.3" className="animate-ping" />
+                    <circle cx={curvePaths.nowCoordinate.x} cy={curvePaths.nowCoordinate.y} r="4.5" fill="#ef4444" stroke="#ffffff" strokeWidth="1.5" />
+                    <rect x={curvePaths.nowCoordinate.x - 12} y={Math.min(170, curvePaths.nowCoordinate.y + 12)} width="24" height="15" rx="3" fill="#ef4444" />
+                    <text x={curvePaths.nowCoordinate.x} y={Math.min(181, curvePaths.nowCoordinate.y + 23)} textAnchor="middle" fill="#ffffff" fontSize="8" fontWeight="bold">
                       NOW
                     </text>
                   </svg>
@@ -690,110 +723,51 @@ export default function ManagerDashboardPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-sans">
-                      <tr className="hover:bg-slate-50 transition">
-                        <td className="py-2.5">
-                          <div className="font-bold text-slate-900 font-mono text-xs">TRX-9481</div>
-                          <div className="text-[10px] text-slate-400 font-mono">14:28:12</div>
-                        </td>
-                        <td className="py-2.5">
-                          <div className="font-semibold text-slate-800">{isTh ? "สมชาย พ." : "Somchai P."}</div>
-                          <div className="text-[10px] text-slate-400">{isTh ? "เครื่อง 01" : "Reg 01"}</div>
-                        </td>
-                        <td className="py-2.5 text-center font-mono">4</td>
-                        <td className="py-2.5 text-right font-black font-mono text-slate-900">
-                          ฿196.00
-                        </td>
-                        <td className="py-2.5 text-slate-600 font-medium">{t("footer.cashKey")}</td>
-                        <td className="py-2.5 text-center">
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">
-                            {isTh ? "ชำระแล้ว" : "Paid"}
-                          </span>
-                        </td>
-                      </tr>
-
-                      <tr className="hover:bg-slate-50 transition">
-                        <td className="py-2.5">
-                          <div className="font-bold text-slate-900 font-mono text-xs">TRX-9480</div>
-                          <div className="text-[10px] text-slate-400 font-mono">14:24:45</div>
-                        </td>
-                        <td className="py-2.5">
-                          <div className="font-semibold text-slate-800">{isTh ? "สมชาย พ." : "Somchai P."}</div>
-                          <div className="text-[10px] text-slate-400">{isTh ? "เครื่อง 01" : "Reg 01"}</div>
-                        </td>
-                        <td className="py-2.5 text-center font-mono">2</td>
-                        <td className="py-2.5 text-right font-black font-mono text-slate-900">
-                          ฿68.00
-                        </td>
-                        <td className="py-2.5 text-slate-600 font-medium">{t("pos.promptpayQrBtn")}</td>
-                        <td className="py-2.5 text-center">
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">
-                            {isTh ? "ชำระแล้ว" : "Paid"}
-                          </span>
-                        </td>
-                      </tr>
-
-                      <tr className="hover:bg-slate-50 transition">
-                        <td className="py-2.5">
-                          <div className="font-bold text-slate-900 font-mono text-xs">TRX-9479</div>
-                          <div className="text-[10px] text-slate-400 font-mono">14:19:02</div>
-                        </td>
-                        <td className="py-2.5">
-                          <div className="font-semibold text-slate-800">{isTh ? "นุ่น ร." : "Noon R."}</div>
-                          <div className="text-[10px] text-slate-400">{isTh ? "เครื่อง 02" : "Reg 02"}</div>
-                        </td>
-                        <td className="py-2.5 text-center font-mono">7</td>
-                        <td className="py-2.5 text-right font-black font-mono text-slate-900">
-                          ฿342.50
-                        </td>
-                        <td className="py-2.5 text-slate-600 font-medium">{t("pos.promptpayQrBtn")}</td>
-                        <td className="py-2.5 text-center">
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">
-                            {isTh ? "ชำระแล้ว" : "Paid"}
-                          </span>
-                        </td>
-                      </tr>
-
-                      <tr className="hover:bg-slate-50 transition">
-                        <td className="py-2.5">
-                          <div className="font-bold text-slate-900 font-mono text-xs">TRX-9478</div>
-                          <div className="text-[10px] text-slate-400 font-mono">14:12:30</div>
-                        </td>
-                        <td className="py-2.5">
-                          <div className="font-semibold text-slate-800">{isTh ? "สมชาย พ." : "Somchai P."}</div>
-                          <div className="text-[10px] text-slate-400">{isTh ? "เครื่อง 01" : "Reg 01"}</div>
-                        </td>
-                        <td className="py-2.5 text-center font-mono">1</td>
-                        <td className="py-2.5 text-right font-black font-mono text-slate-900">
-                          ฿45.00
-                        </td>
-                        <td className="py-2.5 text-slate-600 font-medium">{t("pos.trueMoneyBtn")}</td>
-                        <td className="py-2.5 text-center">
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">
-                            {isTh ? "ชำระแล้ว" : "Paid"}
-                          </span>
-                        </td>
-                      </tr>
-
-                      <tr className="hover:bg-slate-50 transition">
-                        <td className="py-2.5">
-                          <div className="font-bold text-red-700 font-mono text-xs">TRX-9477</div>
-                          <div className="text-[10px] text-slate-400 font-mono">14:05:18</div>
-                        </td>
-                        <td className="py-2.5">
-                          <div className="font-semibold text-slate-800">{isTh ? "นุ่น ร." : "Noon R."}</div>
-                          <div className="text-[10px] text-slate-400">{isTh ? "เครื่อง 02" : "Reg 02"}</div>
-                        </td>
-                        <td className="py-2.5 text-center font-mono">3</td>
-                        <td className="py-2.5 text-right font-black font-mono text-slate-400 line-through">
-                          ฿115.00
-                        </td>
-                        <td className="py-2.5 text-slate-500 font-medium">{isTh ? "ยกเลิก / คืนเงิน" : "Voided / Refund"}</td>
-                        <td className="py-2.5 text-center">
-                          <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-bold text-[10px]">
-                            {isTh ? "ยกเลิก" : "Voided"}
-                          </span>
-                        </td>
-                      </tr>
+                      {(overview?.recentSales && overview.recentSales.length > 0
+                        ? overview.recentSales
+                        : [
+                            { id: "s-1", receiptNo: "TRX-9481", time: "14:28:12", cashierName: isTh ? "สมชาย พ." : "Somchai P.", lane: isTh ? "เครื่อง 01" : "Reg 01", itemCount: 4, total: 196.0, paymentMethod: "CASH", status: "COMPLETED" },
+                            { id: "s-2", receiptNo: "TRX-9480", time: "14:24:45", cashierName: isTh ? "สมชาย พ." : "Somchai P.", lane: isTh ? "เครื่อง 01" : "Reg 01", itemCount: 2, total: 68.0, paymentMethod: "PROMPTPAY", status: "COMPLETED" },
+                            { id: "s-3", receiptNo: "TRX-9479", time: "14:19:02", cashierName: isTh ? "นุ่น ร." : "Noon R.", lane: isTh ? "เครื่อง 02" : "Reg 02", itemCount: 7, total: 342.5, paymentMethod: "PROMPTPAY", status: "COMPLETED" },
+                            { id: "s-4", receiptNo: "TRX-9478", time: "14:12:30", cashierName: isTh ? "สมชาย พ." : "Somchai P.", lane: isTh ? "เครื่อง 01" : "Reg 01", itemCount: 1, total: 45.0, paymentMethod: "TRUE_MONEY", status: "COMPLETED" },
+                            { id: "s-5", receiptNo: "TRX-9477", time: "14:05:18", cashierName: isTh ? "นุ่น ร." : "Noon R.", lane: isTh ? "เครื่อง 02" : "Reg 02", itemCount: 3, total: 154.0, paymentMethod: "CASH", status: "COMPLETED" },
+                          ]
+                      ).map((sale: any) => (
+                        <tr key={sale.id} className="hover:bg-slate-50 transition">
+                          <td className="py-2.5">
+                            <div className="font-bold text-slate-900 font-mono text-xs">{sale.receiptNo}</div>
+                            <div className="text-[10px] text-slate-400 font-mono">{sale.time}</div>
+                          </td>
+                          <td className="py-2.5">
+                            <div className="font-semibold text-slate-800">{sale.cashierName}</div>
+                            <div className="text-[10px] text-slate-400">{sale.lane}</div>
+                          </td>
+                          <td className="py-2.5 text-center font-mono">{sale.itemCount}</td>
+                          <td className="py-2.5 text-right font-black font-mono text-slate-900">
+                            ฿{Number(sale.total).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-2.5 text-slate-600 font-medium text-[11px]">
+                            {sale.paymentMethod === "PROMPTPAY"
+                              ? t("pos.promptpayQrBtn")
+                              : sale.paymentMethod === "CASH"
+                              ? t("footer.cashKey")
+                              : sale.paymentMethod === "CREDIT_CARD"
+                              ? t("pos.creditCardBtn")
+                              : t("pos.trueMoneyBtn")}
+                          </td>
+                          <td className="py-2.5 text-center">
+                            <span
+                              className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                                sale.status === "VOIDED"
+                                  ? "bg-red-100 text-red-700"
+                                  : "bg-emerald-100 text-emerald-800"
+                              }`}
+                            >
+                              {sale.status === "VOIDED" ? (isTh ? "ยกเลิก" : "Voided") : (isTh ? "ชำระแล้ว" : "Paid")}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
