@@ -23,6 +23,23 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    let branchName = "สาขาสุขุมวิท ซอย 24";
+    let branchCode = "BKK-024";
+
+    if (session.branchId) {
+      try {
+        const { db } = await import("@/server/db");
+        const branch = await db.branch.findUnique({
+          where: { id: session.branchId },
+          select: { name: true, code: true },
+        });
+        if (branch) {
+          branchName = branch.name;
+          branchCode = branch.code;
+        }
+      } catch {}
+    }
+
     return NextResponse.json({
       success: true,
       user: {
@@ -31,6 +48,8 @@ export async function GET(req: NextRequest) {
         role: session.role,
         tenantId: session.tenantId,
         branchId: session.branchId,
+        branchName,
+        branchCode,
         terminalId: session.terminalId,
       },
     });

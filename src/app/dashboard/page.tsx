@@ -18,6 +18,7 @@ import {
   Clock,
   Sparkles,
 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { STOCK_REORDER_WARNINGS } from "@/data/mockData";
@@ -40,12 +41,18 @@ const defaultHourlyPoints: HourlySalesPoint[] = [
 export default function ManagerDashboardPage() {
   const { t, language } = useLanguage();
   const isTh = language === "th";
+  const searchParams = useSearchParams();
+  const branchId = searchParams.get("branchId") || "";
 
   const [overview, setOverview] = useState<DashboardOverviewResponse | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    fetch("/api/dashboard/overview")
+    setIsLoading(true);
+    const query = new URLSearchParams();
+    if (branchId) query.set("branchId", branchId);
+
+    fetch(`/api/dashboard/overview?${query.toString()}`)
       .then((res) => res.json())
       .then((data) => {
         if (!data.error) {
@@ -54,7 +61,7 @@ export default function ManagerDashboardPage() {
       })
       .catch((err) => console.warn("Could not fetch overview data:", err))
       .finally(() => setIsLoading(false));
-  }, []);
+  }, [branchId]);
 
   const curvePaths = generateHourlyCurvePaths(
     overview?.hourlyPoints || defaultHourlyPoints,
