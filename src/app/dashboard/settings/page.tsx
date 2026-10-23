@@ -20,9 +20,11 @@ import {
   MapPin,
   X,
   AlertCircle,
+  FileSpreadsheet,
 } from "lucide-react";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import { MonthlyCloseManager } from "@/components/dashboard/MonthlyCloseManager";
 import { useLanguage } from "@/context/LanguageContext";
 import {
   createPromptPayQrDataUrl,
@@ -43,7 +45,9 @@ export default function SettingsPage() {
   const { t, language } = useLanguage();
   const isTh = language === "th";
 
-  const [activeTab, setActiveTab] = useState<"BRANCHES" | "PROMPTPAY" | "SCALE" | "TERMINALS">("BRANCHES");
+  const [activeTab, setActiveTab] = useState<
+    "BRANCHES" | "PROMPTPAY" | "SCALE" | "TERMINALS" | "MONTHLY_CLOSE"
+  >("BRANCHES");
 
   // Branches State
   const [branches, setBranches] = useState<BranchItem[]>([]);
@@ -322,6 +326,19 @@ export default function SettingsPage() {
             >
               <Monitor className="h-4 w-4" />
               <span>{isTh ? "4. เครื่อง POS & Device Token" : "4. Terminals & Pairing"}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("MONTHLY_CLOSE")}
+              className={`pb-3 flex items-center gap-2 border-b-2 transition cursor-pointer ${
+                activeTab === "MONTHLY_CLOSE"
+                  ? "border-emerald-600 text-emerald-700"
+                  : "border-transparent text-slate-500 hover:text-slate-900"
+              }`}
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              <span>{isTh ? "5. ปิดรอบสิ้นเดือน & สำรองข้อมูล (Monthly Close)" : "5. Monthly Close & Purge"}</span>
             </button>
           </div>
 
@@ -713,6 +730,9 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
+
+          {/* TAB 5: MONTHLY CLOSE & ARCHIVE PURGE */}
+          {activeTab === "MONTHLY_CLOSE" && <MonthlyCloseManager />}
         </main>
       </div>
 
