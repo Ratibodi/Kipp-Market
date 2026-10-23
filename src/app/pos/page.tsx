@@ -675,6 +675,22 @@ export default function PosPage() {
           handleVoidLine();
           return;
         }
+      } else if (e.key === "ArrowDown") {
+        if (!isInputFocused && cartItems.length > 0) {
+          e.preventDefault();
+          const currentIdx = cartItems.findIndex((it) => it.id === selectedCartItemId);
+          const nextIdx = currentIdx < cartItems.length - 1 ? currentIdx + 1 : 0;
+          setSelectedCartItemId(cartItems[nextIdx].id);
+          return;
+        }
+      } else if (e.key === "ArrowUp") {
+        if (!isInputFocused && cartItems.length > 0) {
+          e.preventDefault();
+          const currentIdx = cartItems.findIndex((it) => it.id === selectedCartItemId);
+          const prevIdx = currentIdx > 0 ? currentIdx - 1 : cartItems.length - 1;
+          setSelectedCartItemId(cartItems[prevIdx].id);
+          return;
+        }
       }
 
       // Global Barcode Scanner Fast-Buffer Detection (< 60ms between characters)
@@ -1056,101 +1072,117 @@ export default function PosPage() {
 
           {/* Table Body */}
           <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
-            {cartItems.map((item, idx) => (
-              <div
-                key={item.id}
-                onClick={() => setSelectedCartItemId(item.id)}
-                className={`px-5 py-3 grid grid-cols-12 items-center hover:bg-slate-50 transition cursor-pointer ${
-                  selectedCartItemId === item.id
-                    ? "border-l-4 border-l-emerald-600 bg-emerald-50/40 shadow-2xs"
-                    : idx === 0 && !selectedCartItemId
-                    ? "border-l-4 border-l-emerald-500 bg-emerald-50/20"
-                    : ""
-                }`}
-              >
-                {/* Description & Barcode (6 cols) */}
-                <div className="col-span-6 flex items-center gap-3 pr-2">
-                  <img
-                    src={item.imageUrl}
-                    alt={item.name}
-                    className="w-11 h-11 rounded-xl object-cover border border-slate-200 bg-slate-100 shrink-0"
-                  />
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-slate-900 text-xs leading-snug">{item.name}</span>
-                      {item.badge && (
-                        <span
-                          className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wide ${
-                            item.badge === "NEW"
-                              ? "bg-lime-200 text-lime-900 border border-lime-300"
-                              : item.badge === "Warmed Up"
-                              ? "bg-amber-100 text-amber-800 border border-amber-200"
-                              : "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                          }`}
-                        >
-                          {item.badge}
+            {cartItems.map((item, idx) => {
+              const isSelected = selectedCartItemId === item.id || (!selectedCartItemId && idx === 0);
+              return (
+                <div
+                  key={item.id}
+                  onClick={() => setSelectedCartItemId(item.id)}
+                  className={`px-5 py-3 grid grid-cols-12 items-center transition cursor-pointer select-none ${
+                    isSelected
+                      ? "border-l-4 border-l-emerald-600 bg-emerald-50/70 shadow-2xs ring-1 ring-emerald-500/20"
+                      : "hover:bg-slate-50 border-l-4 border-l-transparent"
+                  }`}
+                >
+                  {/* Description & Barcode (6 cols) */}
+                  <div className="col-span-6 flex items-center gap-3 pr-2">
+                    <img
+                      src={item.imageUrl}
+                      alt={item.name}
+                      className="w-11 h-11 rounded-xl object-cover border border-slate-200 bg-slate-100 shrink-0"
+                    />
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-slate-900 text-xs leading-snug">{item.name}</span>
+                        {isSelected && (
+                          <span className="text-[9px] font-black px-1.5 py-0.2 rounded-full bg-emerald-600 text-white shadow-2xs tracking-tight animate-fade-in flex items-center gap-1">
+                            <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></span>
+                            {isTh ? "เลือกอยู่" : "Active"}
+                          </span>
+                        )}
+                        {item.badge && (
+                          <span
+                            className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wide ${
+                              item.badge === "NEW"
+                                ? "bg-lime-200 text-lime-900 border border-lime-300"
+                                : item.badge === "Warmed Up"
+                                ? "bg-amber-100 text-amber-800 border border-amber-200"
+                                : "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                            }`}
+                          >
+                            {item.badge}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-500 font-mono">
+                        <span>{item.barcode}</span>
+                        {item.categoryTag && (
+                          <>
+                            <span className="text-slate-300">•</span>
+                            <span className="text-slate-600">{item.categoryTag}</span>
+                          </>
+                        )}
+                        <span className="text-slate-300">•</span>
+                        <span className="px-1.5 py-0.2 rounded bg-slate-200/80 text-slate-700 text-[10px] font-semibold">
+                          {t("pos.inStock")}: {item.stockCount}
                         </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-500 font-mono">
-                      <span>{item.barcode}</span>
-                      {item.categoryTag && (
-                        <>
-                          <span className="text-slate-300">•</span>
-                          <span className="text-slate-600">{item.categoryTag}</span>
-                        </>
-                      )}
-                      <span className="text-slate-300">•</span>
-                      <span className="px-1.5 py-0.2 rounded bg-slate-200/80 text-slate-700 text-[10px] font-semibold">
-                        {t("pos.inStock")}: {item.stockCount}
-                      </span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Unit Price (2 cols) */}
-                <div className="col-span-2 text-right font-black font-mono text-slate-900 text-sm">
-                  ฿{item.unitPrice.toFixed(2)}
-                </div>
+                  {/* Unit Price (2 cols) */}
+                  <div className="col-span-2 text-right font-black font-mono text-slate-900 text-sm">
+                    ฿{item.unitPrice.toFixed(2)}
+                  </div>
 
-                {/* Qty Stepper (2 cols) */}
-                <div className="col-span-2 flex items-center justify-center">
-                  <div className="inline-flex items-center border border-slate-300 rounded-xl bg-white shadow-2xs overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => handleUpdateQty(item.id, -1)}
-                      className="px-2.5 py-1 hover:bg-slate-100 text-slate-600 transition"
-                    >
-                      <Minus className="h-3 w-3" />
-                    </button>
-                    <span className="px-3 font-mono font-black text-slate-900 text-xs">
-                      {item.qty}
+                  {/* Qty Stepper (2 cols) */}
+                  <div className="col-span-2 flex items-center justify-center">
+                    <div className="inline-flex items-center border border-slate-300 rounded-xl bg-white shadow-2xs overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleUpdateQty(item.id, -1);
+                        }}
+                        className="px-2.5 py-1 hover:bg-slate-100 text-slate-600 transition"
+                      >
+                        <Minus className="h-3 w-3" />
+                      </button>
+                      <span className="px-3 font-mono font-black text-slate-900 text-xs">
+                        {item.qty}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleUpdateQty(item.id, 1);
+                        }}
+                        className="px-2.5 py-1 hover:bg-slate-100 text-slate-600 transition"
+                      >
+                        <Plus className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Line Total & Delete (2 cols) */}
+                  <div className="col-span-2 flex items-center justify-end gap-2 pr-2">
+                    <span className="font-black font-mono text-slate-950 text-sm">
+                      ฿{item.lineTotal.toFixed(2)}
                     </span>
                     <button
                       type="button"
-                      onClick={() => handleUpdateQty(item.id, 1)}
-                      className="px-2.5 py-1 hover:bg-slate-100 text-slate-600 transition"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveItem(item.id);
+                      }}
+                      className="p-1 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition"
                     >
-                      <Plus className="h-3 w-3" />
+                      <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 </div>
-
-                {/* Line Total & Delete (2 cols) */}
-                <div className="col-span-2 flex items-center justify-end gap-2 pr-2">
-                  <span className="font-black font-mono text-slate-950 text-sm">
-                    ฿{item.lineTotal.toFixed(2)}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveItem(item.id)}
-                    className="p-1 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
 
             {cartItems.length === 0 && (
               <div className="p-12 text-center text-slate-400 text-xs flex flex-col items-center justify-center gap-2">
