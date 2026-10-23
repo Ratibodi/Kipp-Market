@@ -48,6 +48,7 @@ import {
   StaffMember,
   CustomerMember,
   MOCK_CUSTOMERS,
+  MOCK_CATALOG_PRODUCTS,
 } from "@/data/mockData";
 import { useLanguage } from "@/context/LanguageContext";
 
@@ -68,10 +69,21 @@ export default function PosPage() {
   const [activeCustomer, setActiveCustomer] = useState<CustomerMember | null>(MOCK_CUSTOMERS[0]);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState<boolean>(false);
 
+  // Active Session and Multi-Tenant Info
+  const [sessionInfo, setSessionInfo] = useState<{
+    tenantId: string;
+    branchId: string;
+    terminalId: string;
+  }>({
+    tenantId: "demo-tenant-kipp",
+    branchId: "branch-bkk-024",
+    terminalId: "term-01",
+  });
+
   // New POS Operations Modals State
   const [activeStaff, setActiveStaff] = useState<StaffMember>(MOCK_STAFF[0]);
 
-  // Sync active staff with authenticated session from /api/auth/me
+  // Sync active staff and tenant session from /api/auth/me
   useEffect(() => {
     async function syncActiveStaff() {
       try {
@@ -93,6 +105,13 @@ export default function PosPage() {
                   : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&h=120&q=80",
               shiftActive: true,
             });
+            if (data.user.tenantId) {
+              setSessionInfo({
+                tenantId: data.user.tenantId,
+                branchId: data.user.branchId || "branch-bkk-024",
+                terminalId: data.user.terminalId || "term-01",
+              });
+            }
             setShiftState((prev) => ({
               ...prev,
               openedBy: data.user.displayName,
@@ -281,17 +300,7 @@ export default function PosPage() {
 
   // Barcode scanned from camera
   const handleCameraScan = (barcode: string) => {
-    sounds.playScanBeep();
-    if (barcode === "8850188201948") {
-      handleUpdateQty("item-1", 1);
-      setSuccessToast(isTh ? "สแกนสำเร็จ: นมสดเมจิ 830มล. (+1)" : "Scanned: Meiji Fresh Milk (+1)");
-    } else if (barcode === "8850999001201") {
-      handleUpdateQty("item-3", 1);
-      setSuccessToast(isTh ? "สแกนสำเร็จ: โซดาสิงห์ 325มล. (+1)" : "Scanned: Singha Soda (+1)");
-    } else {
-      setSuccessToast(isTh ? `สแกนบาร์โค้ด: ${barcode}` : `Scanned barcode: ${barcode}`);
-    }
-    setTimeout(() => setSuccessToast(null), 3000);
+    handleBarcodeScanned(barcode);
   };
 
   // Held Cart Handlers (Design Doc 7.15)
@@ -387,7 +396,41 @@ export default function PosPage() {
       return;
     }
 
-    // 2. Check if matches initial items mock
+    // 2. Check if matches Catalog Products
+    const catalogMatch = MOCK_CATALOG_PRODUCTS.find(
+      (it) =>
+        it.barcode === cleanBarcode ||
+        it.sku.toLowerCase() === cleanBarcode.toLowerCase() ||
+        it.plu === cleanBarcode ||
+        it.nameTh.toLowerCase() === cleanBarcode.toLowerCase() ||
+        it.nameEn.toLowerCase() === cleanBarcode.toLowerCase()
+    );
+    if (catalogMatch) {
+      setCartItems((prev) => [
+        {
+          id: `scanned-${Date.now()}`,
+          name: isTh ? catalogMatch.nameTh : catalogMatch.nameEn,
+          sku: catalogMatch.sku,
+          barcode: catalogMatch.barcode,
+          unitPrice: catalogMatch.price,
+          qty: 1,
+          lineTotal: catalogMatch.price,
+          imageUrl: catalogMatch.imageUrl,
+          categoryTag: catalogMatch.category,
+          stockCount: catalogMatch.stockQty,
+        },
+        ...prev,
+      ]);
+      setSuccessToast(
+        isTh
+          ? `สแกนสำเร็จ: ${isTh ? catalogMatch.nameTh : catalogMatch.nameEn} (฿${catalogMatch.price.toFixed(2)})`
+          : `Scanned: ${catalogMatch.nameEn} (฿${catalogMatch.price.toFixed(2)})`
+      );
+      setTimeout(() => setSuccessToast(null), 3000);
+      return;
+    }
+
+    // 3. Check if matches initial items mock
     const mockMatch = INITIAL_CART_ITEMS.find(
       (it) => it.barcode === cleanBarcode || it.sku.toLowerCase() === cleanBarcode.toLowerCase()
     );
@@ -410,7 +453,7 @@ export default function PosPage() {
       return;
     }
 
-    // 3. Scale Barcode embedded EAN-13 (Prefix 20-29) e.g., 2000105001256 (PLU 105, 1.250kg)
+    // 4. Scale Barcode embedded EAN-13 (Prefix 20-29) e.g., 2000105001256 (PLU 105, 1.250kg)
     if (
       cleanBarcode.length === 13 &&
       (cleanBarcode.startsWith("20") || cleanBarcode.startsWith("21") || cleanBarcode.startsWith("22"))
@@ -418,11 +461,14 @@ export default function PosPage() {
       const plu = cleanBarcode.substring(2, 7);
       const weightGrams = parseInt(cleanBarcode.substring(7, 12), 10) || 1000;
       const weightKg = Number((weightGrams / 1000).toFixed(3));
-      const pricePerKg = 180.0;
+      
+      const pluMatch = MOCK_CATALOG_PRODUCTS.find((p) => p.plu === plu || p.plu === parseInt(plu, 10).toString());
+      const productName = pluMatch ? (isTh ? pluMatch.nameTh : pluMatch.nameEn) : `สินค้าชั่งน้ำหนัก (PLU #${plu})`;
+      const pricePerKg = pluMatch ? pluMatch.price : 180.0;
       const total = Number((weightKg * pricePerKg).toFixed(2));
       handleAddWeightItem({
         id: `scale-${Date.now()}`,
-        name: `เนื้อสันในโคขุน (PLU #${plu})`,
+        name: productName,
         unitPrice: pricePerKg,
         weightKg,
         totalAmount: total,
@@ -556,15 +602,18 @@ export default function PosPage() {
     return () => cleanup();
   }, []);
 
-  const handlePaymentSuccess = () => {
+  const handlePaymentSuccess = (customTendered?: number, customChange?: number) => {
     sounds.playSuccessChime();
     setIsPromptPayOpen(false);
     setIsCashModalOpen(false);
 
+    const cashReceivedVal = customTendered ?? selectedQuickCash;
+    const changeVal = customChange ?? changeDue;
+
     // Queue Outbox Sale into IndexedDB Outbox (Design Doc 7.2)
     if (cartItems.length > 0) {
       const outboxItems = cartItems.map((item) => ({
-        productId: item.id.replace("item-", "prod-"),
+        productId: item.id.replace("item-", "prod-").replace("scanned-", "prod-"),
         nameSnapshot: item.name,
         barcodeSnapshot: item.barcode,
         qty: item.qty.toString(),
@@ -574,16 +623,16 @@ export default function PosPage() {
 
       const outboxSale: OutboxSale = {
         id: `sale-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
-        tenantId: "tenant-mock-01",
-        branchId: "branch-mock-01",
-        terminalId: "term-mock-01",
+        tenantId: sessionInfo.tenantId,
+        branchId: sessionInfo.branchId,
+        terminalId: sessionInfo.terminalId,
         shiftId: shiftState.shiftId,
         cashierId: activeStaff.id,
         receiptNo: `#TRX-${Math.floor(1000 + Math.random() * 9000)}`,
         total: totalAmount.toString(),
         paymentMethod: isPromptPayOpen ? "PROMPTPAY" : "CASH",
-        cashReceived: selectedQuickCash.toString(),
-        change: changeDue.toString(),
+        cashReceived: cashReceivedVal.toString(),
+        change: changeVal.toString(),
         receiptToken: `rcpt-${Date.now()}-${Math.random().toString(36).substring(7)}`,
         soldAt: new Date().toISOString(),
         customerId: activeCustomer?.id,
