@@ -117,6 +117,7 @@ model Tenant {
   expenses        Expense[]
   shifts          Shift[]
   auditLogs       AuditLog[]
+  monthlyArchives MonthlyArchive[]
 
   @@index([slug])
   @@index([status])
@@ -546,3 +547,24 @@ model AuditLog {
   @@index([tenantId, entity, entityId])
   @@index([tenantId, createdAt])
 }
+
+model MonthlyArchive {
+  id            String   @id @default(uuid())
+  tenantId      String
+  yearMonth     String   // Format: "YYYY-MM" (e.g., "2026-09")
+  totalSales    Decimal  @db.Decimal(12, 2)
+  totalCost     Decimal  @db.Decimal(12, 4)
+  netProfit     Decimal  @db.Decimal(12, 2)
+  receiptsCount Int
+  filePath      String?  // Storage path for generated Excel
+  downloadToken String   @unique
+  closedAt      DateTime @default(now())
+  closedBy      String   // Member ID or "SYSTEM_CRON"
+  createdAt     DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, yearMonth])
+  @@index([tenantId, yearMonth])
+}
+
