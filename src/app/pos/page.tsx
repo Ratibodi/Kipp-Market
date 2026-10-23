@@ -24,6 +24,7 @@ import {
   Scale,
   Camera,
   Lock,
+  X,
 } from "lucide-react";
 import { PosHeader } from "@/components/pos/PosHeader";
 import { PosFooter } from "@/components/pos/PosFooter";
@@ -36,6 +37,9 @@ import { CameraScannerModal } from "@/components/pos/CameraScannerModal";
 import { ManagerOverrideModal } from "@/components/pos/ManagerOverrideModal";
 import { HoldCartModal, HeldCart } from "@/components/pos/HoldCartModal";
 import { CustomerMemberModal } from "@/components/pos/CustomerMemberModal";
+import { EditQtyModal } from "@/components/pos/EditQtyModal";
+import { DiscountModal, DiscountInfo } from "@/components/pos/DiscountModal";
+import { ThermalPrinterModal } from "@/components/pos/ThermalPrinterModal";
 import { sounds } from "@/lib/soundEffects";
 import { transliterateThaiBarcode } from "@/lib/scannerListener";
 import { queueSaleForSync, initBackgroundSync } from "@/client/offline/syncWorker";
@@ -183,14 +187,51 @@ export default function PosPage() {
     },
   ]);
 
-  // Cart calculations
-  const totalAmount = cartItems.reduce((acc, item) => acc + item.lineTotal, 0);
+  // 1, 2, 5, 6 States: Selection, Qty Modal, Discount, Printer & Drawer
+  const [selectedCartItemId, setSelectedCartItemId] = useState<string | null>(
+    INITIAL_CART_ITEMS[0]?.id || null
+  );
+  const [isQtyModalOpen, setIsQtyModalOpen] = useState<boolean>(false);
+  const [isDiscountModalOpen, setIsDiscountModalOpen] = useState<boolean>(false);
+  const [activeDiscount, setActiveDiscount] = useState<DiscountInfo | null>(null);
+  const [isThermalModalOpen, setIsThermalModalOpen] = useState<boolean>(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
+  const [isOnline, setIsOnline] = useState<boolean>(true);
+
+  // Monitor real-time online status
+  useEffect(() => {
+    setIsOnline(typeof navigator !== "undefined" ? navigator.onLine : true);
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  // Cart calculations with Discount deduction
+  const rawSubtotal = cartItems.reduce((acc, item) => acc + item.lineTotal, 0);
   const totalUnits = cartItems.reduce((acc, item) => acc + item.qty, 0);
   const totalItemsCount = cartItems.length;
 
+  const discountAmount = activeDiscount
+    ? activeDiscount.type === "PERCENT"
+      ? Number(((rawSubtotal * activeDiscount.value) / 100).toFixed(2))
+      : Math.min(rawSubtotal, activeDiscount.value)
+    : 0;
+
+  const totalAmount = Math.max(0, Number((rawSubtotal - discountAmount).toFixed(2)));
   const vatExcl = totalAmount / 1.07;
   const vatAmount = totalAmount - vatExcl;
   const changeDue = Math.max(0, selectedQuickCash - totalAmount);
+
+  // Currently selected item for F4 / Delete
+  const selectedCartItem =
+    cartItems.find((it) => it.id === selectedCartItemId) ||
+    cartItems[0] ||
+    null;
 
   // Handlers for cart
   const handleUpdateQty = (id: string, delta: number) => {
@@ -214,9 +255,69 @@ export default function PosPage() {
     );
   };
 
+  // Feature 1: Edit Qty via F4 Modal
+  const handleEditQty = (id: string, newQty: number) => {
+    sounds.playScanBeep();
+    setCartItems((prev) =>
+      prev.map((item) => {
+        if (item.id === id) {
+          return {
+            ...item,
+            qty: newQty,
+            lineTotal: Number((newQty * item.unitPrice).toFixed(2)),
+          };
+        }
+        return item;
+      })
+    );
+    setSuccessToast(isTh ? `ปรับจำนวนเป็น ${newQty} ชิ้นเรียบร้อย` : `Updated qty to ${newQty}`);
+    setTimeout(() => setSuccessToast(null), 3000);
+  };
+
+  // Feature 2: Void Selected Line via Del
+  const handleVoidLine = () => {
+    if (cartItems.length === 0) {
+      setSuccessToast(isTh ? "ไม่มีรายการสินค้าในตะกร้า" : "Cart is empty");
+      setTimeout(() => setSuccessToast(null), 2000);
+      return;
+    }
+
+    const itemToVoid =
+      cartItems.find((it) => it.id === selectedCartItemId) || cartItems[0];
+
+    if (!itemToVoid) return;
+
+    sounds.playErrorBuzzer();
+    const remaining = cartItems.filter((it) => it.id !== itemToVoid.id);
+    setCartItems(remaining);
+    setSelectedCartItemId(remaining[0]?.id || null);
+
+    setSuccessToast(
+      isTh
+        ? `ลบรายการ "${itemToVoid.name}" ออกจากบิลแล้ว [Del]`
+        : `Voided line: ${itemToVoid.name} [Del]`
+    );
+    setTimeout(() => setSuccessToast(null), 3000);
+  };
+
+  // Feature 6: Kick Cash Drawer
+  const handleKickDrawer = () => {
+    sounds.playCashDrawer();
+    setIsDrawerOpen(true);
+    setSuccessToast(isTh ? "เด้งเปิดลิ้นชักเก็บเงินแล้ว (Kick Drawer)" : "Cash drawer kicked open!");
+    setTimeout(() => {
+      setIsDrawerOpen(false);
+      setSuccessToast(null);
+    }, 3500);
+  };
+
   const handleRemoveItem = (id: string) => {
     sounds.playErrorBuzzer();
-    setCartItems((prev) => prev.filter((item) => item.id !== id));
+    const remaining = cartItems.filter((item) => item.id !== id);
+    setCartItems(remaining);
+    if (selectedCartItemId === id) {
+      setSelectedCartItemId(remaining[0]?.id || null);
+    }
   };
 
   const handleClearCart = () => {
@@ -513,10 +614,17 @@ export default function PosPage() {
         isCameraModalOpen ||
         isOverrideModalOpen ||
         isHoldModalOpen ||
-        isCustomerModalOpen
+        isCustomerModalOpen ||
+        isQtyModalOpen ||
+        isDiscountModalOpen ||
+        isThermalModalOpen
       ) {
         return;
       }
+
+      // If user is currently focused on an input element, let the input handle it
+      const target = e.target as HTMLElement | null;
+      const isInputFocused = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA");
 
       // Check for Function Hotkeys
       if (e.key === "F10") {
@@ -539,6 +647,16 @@ export default function PosPage() {
         e.preventDefault();
         setIsHoldModalOpen(true);
         return;
+      } else if (e.key === "F5") {
+        e.preventDefault();
+        setIsDiscountModalOpen(true);
+        return;
+      } else if (e.key === "F4") {
+        e.preventDefault();
+        if (cartItems.length > 0) {
+          setIsQtyModalOpen(true);
+        }
+        return;
       } else if (e.key === "F2") {
         e.preventDefault();
         setIsScaleModalOpen(true);
@@ -551,11 +669,13 @@ export default function PosPage() {
         e.preventDefault();
         setIsLockScreenOpen(true);
         return;
+      } else if (e.key === "Delete") {
+        if (!isInputFocused) {
+          e.preventDefault();
+          handleVoidLine();
+          return;
+        }
       }
-
-      // If user is currently focused on an input element, let the input handle it
-      const target = e.target as HTMLElement | null;
-      const isInputFocused = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA");
 
       // Global Barcode Scanner Fast-Buffer Detection (< 60ms between characters)
       const now = Date.now();
@@ -593,6 +713,10 @@ export default function PosPage() {
     isOverrideModalOpen,
     isHoldModalOpen,
     isCustomerModalOpen,
+    isQtyModalOpen,
+    isDiscountModalOpen,
+    isThermalModalOpen,
+    selectedCartItemId,
     cartItems,
   ]);
 
@@ -647,6 +771,8 @@ export default function PosPage() {
     }
 
     setCartItems([]);
+    setActiveDiscount(null);
+    setSelectedCartItemId(null);
     const pointsEarned = Math.max(1, Math.floor(totalAmount / 10));
     setSuccessToast(
       activeCustomer
@@ -746,7 +872,16 @@ export default function PosPage() {
 
             <button
               type="button"
-              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs font-semibold transition"
+              onClick={() => {
+                if (cartItems.length > 0) {
+                  setIsQtyModalOpen(true);
+                } else {
+                  setSuccessToast(isTh ? "กรุณาสแกนหรือเลือกสินค้าก่อนเปลี่ยนจำนวน [F4]" : "Please add an item first");
+                  setTimeout(() => setSuccessToast(null), 2500);
+                }
+              }}
+              title={isTh ? "เปลี่ยนจำนวนสินค้า [F4]" : "Edit Quantity [F4]"}
+              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs font-semibold transition cursor-pointer flex items-center"
             >
               <strong className="text-emerald-700 font-mono mr-1">F4</strong> {t("pos.editQty")}
             </button>
@@ -924,8 +1059,13 @@ export default function PosPage() {
             {cartItems.map((item, idx) => (
               <div
                 key={item.id}
-                className={`px-5 py-3 grid grid-cols-12 items-center hover:bg-slate-50 transition ${
-                  idx === 0 ? "border-l-4 border-l-emerald-500 bg-emerald-50/20" : ""
+                onClick={() => setSelectedCartItemId(item.id)}
+                className={`px-5 py-3 grid grid-cols-12 items-center hover:bg-slate-50 transition cursor-pointer ${
+                  selectedCartItemId === item.id
+                    ? "border-l-4 border-l-emerald-600 bg-emerald-50/40 shadow-2xs"
+                    : idx === 0 && !selectedCartItemId
+                    ? "border-l-4 border-l-emerald-500 bg-emerald-50/20"
+                    : ""
                 }`}
               >
                 {/* Description & Barcode (6 cols) */}
@@ -1026,13 +1166,24 @@ export default function PosPage() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-semibold transition"
+                onClick={() => {
+                  if (cartItems.length > 0) {
+                    setIsQtyModalOpen(true);
+                  } else {
+                    setSuccessToast(isTh ? "กรุณาสแกนหรือเลือกสินค้าก่อนเปลี่ยนจำนวน [F4]" : "Please add an item first");
+                    setTimeout(() => setSuccessToast(null), 2500);
+                  }
+                }}
+                title={isTh ? "เปลี่ยนจำนวนสินค้า [F4]" : "Change Quantity [F4]"}
+                className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-semibold transition cursor-pointer flex items-center"
               >
                 <strong className="text-emerald-700 font-mono mr-1">F4</strong> {t("pos.changeQty")}
               </button>
               <button
                 type="button"
-                className="px-3 py-1.5 rounded-xl bg-white hover:bg-red-50 border border-slate-300 text-red-600 text-xs font-semibold transition"
+                onClick={handleVoidLine}
+                title={isTh ? "ลบรายการที่เลือก [Del]" : "Void Selected Line [Del]"}
+                className="px-3 py-1.5 rounded-xl bg-white hover:bg-red-50 border border-slate-300 hover:border-red-300 text-red-600 text-xs font-semibold transition cursor-pointer flex items-center"
               >
                 <strong className="text-red-600 font-mono mr-1">Del</strong> {t("pos.voidLine")}
               </button>
@@ -1098,9 +1249,43 @@ export default function PosPage() {
                 <span>{t("pos.vat7")}</span>
                 <span className="font-mono text-slate-800">฿{vatAmount.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-emerald-700">
-                <span>{t("pos.memberDiscount")}</span>
-                <span className="font-mono font-bold">-฿0.00</span>
+              <div
+                onClick={() => setIsDiscountModalOpen(true)}
+                className="flex justify-between items-center text-emerald-700 cursor-pointer p-1 -mx-1 rounded-lg hover:bg-emerald-50/80 transition group"
+                title={isTh ? "คลิกเพื่อใส่ส่วนลดหรือคูปอง [F5]" : "Click to apply discount [F5]"}
+              >
+                <div className="flex items-center gap-1.5">
+                  <Tag className="h-3 w-3 text-emerald-600" />
+                  <span className="font-semibold">{t("pos.memberDiscount")}</span>
+                  {activeDiscount ? (
+                    <span className="text-[10px] font-mono font-bold bg-emerald-100 text-emerald-900 px-1.5 py-0.2 rounded border border-emerald-300">
+                      {activeDiscount.label}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-slate-400 font-mono group-hover:text-emerald-700">
+                      [F5]
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-mono font-bold">
+                    {discountAmount > 0 ? `-฿${discountAmount.toFixed(2)}` : "-฿0.00"}
+                  </span>
+                  {activeDiscount && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveDiscount(null);
+                        setSuccessToast(isTh ? "ยกเลิกส่วนลดแล้ว" : "Discount removed");
+                        setTimeout(() => setSuccessToast(null), 2500);
+                      }}
+                      className="p-0.5 rounded text-slate-400 hover:text-red-600 hover:bg-red-50"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="pt-2 border-t border-slate-200 flex justify-between font-bold text-slate-900">
                 <span>{t("pos.grandTotalNet")}</span>
@@ -1228,7 +1413,18 @@ export default function PosPage() {
       </div>
 
       {/* Bottom Status Bar & Hotkeys */}
-      <PosFooter />
+      <PosFooter
+        isDrawerOpen={isDrawerOpen}
+        onKickDrawer={handleKickDrawer}
+        onTestPrint={() => setIsThermalModalOpen(true)}
+        onSyncOutbox={() => {
+          sounds.playScanBeep();
+          setSuccessToast(isTh ? "สถานะการเชื่อมต่อ: ซิงก์ข้อมูลสด (Live Cloud Ready)" : "Cloud Sync Live 100%");
+          setTimeout(() => setSuccessToast(null), 2500);
+        }}
+        isOnline={isOnline}
+        outboxPendingCount={0}
+      />
 
       {/* Thai PromptPay QR Flow Modal (Screenshot 1) */}
       <PromptPayModal
@@ -1328,6 +1524,40 @@ export default function PosPage() {
           setTimeout(() => setSuccessToast(null), 3000);
         }}
         cartTotal={totalAmount}
+      />
+
+      {/* Feature 1: Change Quantity Modal [F4] */}
+      <EditQtyModal
+        isOpen={isQtyModalOpen}
+        onClose={() => setIsQtyModalOpen(false)}
+        targetItem={selectedCartItem}
+        onConfirmQty={handleEditQty}
+      />
+
+      {/* Feature 5: Member Discount & Promo Coupon Modal [F5] */}
+      <DiscountModal
+        isOpen={isDiscountModalOpen}
+        onClose={() => setIsDiscountModalOpen(false)}
+        subtotal={rawSubtotal}
+        activeDiscount={activeDiscount}
+        onApplyDiscount={(disc) => {
+          setActiveDiscount(disc);
+          sounds.playSuccessChime();
+          setSuccessToast(isTh ? `ใช้ส่วนลด "${disc.label}" สำเร็จ` : `Applied: ${disc.label}`);
+          setTimeout(() => setSuccessToast(null), 3000);
+        }}
+        onClearDiscount={() => {
+          setActiveDiscount(null);
+          setSuccessToast(isTh ? "ยกเลิกส่วนลดเรียบร้อยแล้ว" : "Discount removed");
+          setTimeout(() => setSuccessToast(null), 2500);
+        }}
+      />
+
+      {/* Feature 6: Thermal Slip Printer Test & Preview Modal */}
+      <ThermalPrinterModal
+        isOpen={isThermalModalOpen}
+        onClose={() => setIsThermalModalOpen(false)}
+        terminalCode={sessionInfo.terminalId}
       />
     </div>
   );
